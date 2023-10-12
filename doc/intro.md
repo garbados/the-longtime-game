@@ -1,10 +1,8 @@
-# The Longtime
-
-A game about change, and minotaurs.
+# Welcome to *The Longtime*
 
 Take on the role of a minot herd's revered spirit of the collective, the thread of all their shared dreams, *the Longtime*, and influence their monumental efforts as they traverse an ancient migration path.
 
-*Are you there, Longtime? It's me, Ibba. I don't know what to do... but, maybe you do.*
+*Are you there, Longtime? It's me, Ib-Ba. I don't know what to do... but, maybe you will.*
 
 Answer dreams and prayers, and become a part of a society that shifts with the earth, and shifts the earth in turn.
 
