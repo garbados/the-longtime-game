@@ -20,7 +20,7 @@ There are twelve months in a year, and each month is spent in a new location. At
 
 Every time you travel to your next location, an event occurs. You, the player, have no influence over the event or how the herd handles it. You can only watch as they think, and struggle, for themselves.
 
-Your migration path has many *stages*, and each stage has up to three locations. At the end of each month, you travel to one of the locations at the next stage of your migration path. You can increase your options for the next stage, and certain events will even add entirely new stages. Some locations act as shortcuts, advancing you to the next-next stage without expending another month. Eventually, you may even construct your own shortcuts!
+Your migration path has many *stages*, and each stage has up to five locations. At the end of each month, you travel to one of the locations at the next stage of your migration path. You can increase your options for the next stage, and certain events will even add entirely new stages. Some locations act as shortcuts, advancing you to the next stage without advancing the calendar. Eventually, you may even construct your own shortcuts!
 
 As you leave each location, you will receive the prayers of the herd. They will consult you in dream, asking how to spend their lives, whether to have a child, or simply to protect the wellbeing of the herd. Of course, you *are* the herd. They are only asking themselves.
 

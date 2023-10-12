@@ -1,10 +1,12 @@
-(ns the-longtime-game.core 
+(ns the-longtime-game.core
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as string]
             [clojure.test.check.generators :as g]))
 
 (def resources #{:food
+                 :rations
                  :poultice
+                 :wood
                  :bone
                  :ore
                  :tools})
@@ -14,10 +16,16 @@
               :geology
               :zoology
               :herbalism
+              :granarism
               :medicine
-              :artistry
-              :organizing
-              :research})
+              :organizing})
+
+(def skill-ranks ["unfamiliar"
+                  "novice"
+                  "learned"
+                  "adept"
+                  "expert"
+                  "virtuoso"])
 
 (def locations #{:plains
                  :forest
@@ -36,10 +44,10 @@
    :geology    "geo"
    :zoology    "zoo"
    :herbalism  "herb"
+   :granarism  "gran"
    :medicine   "med"
    :artistry   "art"
-   :organizing "org"
-   :research   "re"})
+   :organizing "org"})
 
 (def first-syllable
   ["Il" "Ol" "Ib" "Ak"
@@ -50,6 +58,10 @@
   ["Ba" "So" "Po" "Ma"
    "Na" "Mi" "Si" "Pa"
    "Zo" "Ze" "Ki" "Gi"])
+
+(def infrastructure #{:todo}) ; TODO
+
+(def rationales #{:todo}) ; TODO
 
 (defn gen-name []
   (string/join "-" [(rand-nth first-syllable)
@@ -70,7 +82,7 @@
                              :min-count 0
                              :max-count 3))
 (s/def ::skill skills)
-(s/def ::skills (s/map-of ::skill (s/int-in 0 5)))
+(s/def ::skills (s/map-of ::skill (s/int-in 0 6)))
 (s/def ::trait traits)
 (s/def ::traits (s/coll-of ::trait :kind set?))
 (s/def ::fulfillment (s/int-in 0 100))
@@ -83,14 +95,32 @@
                    ::fulfillment]))
 
 (s/def ::type locations)
+(s/def ::infrastructure infrastructure)
+(s/def ::infra (s/coll-of ::infrastructure :kind set?))
+(s/def ::nutrient nat-int?)
+(s/def ::n ::nutrient)
+(s/def ::k ::nutrient)
+(s/def ::p ::nutrient)
 (s/def ::flora (s/int-in 0 5))
-(s/def ::fauna (s/int-in 0 5))
-(s/def ::crew (s/nilable (s/coll-of ::individual :count 6)))
 
-(s/def ::location (s/keys :req-un [::type
-                                   ::flora
-                                   ::fauna
-                                   ::crew]))
+(s/def ::meta
+  (s/or
+   :plains (s/keys :req-un [::infra
+                            ::n
+                            ::k
+                            ::p])
+   :forest (s/keys :req-un [::infra
+                            ::flora])
+   :steppe nil?
+   :basic  (s/keys :req-un [::infra])))
+
+(s/def ::location
+  (s/and
+   (s/keys :req-un [::type
+                    ::meta])
+   (fn [location]
+     (contains? #{:basic (:type location)}
+                (first (:meta location))))))
 
 (s/def ::ethos (s/coll-of ::skill :kind set? :count 2))
 (s/def ::syndicate ::ethos)
@@ -99,35 +129,29 @@
 (s/def ::individuals (s/coll-of ::individual))
 (s/def ::resource resources)
 (s/def ::stores (s/map-of ::resource pos-int?))
-(s/def ::rationale #{:todo}) ; TODO
-(s/def ::researching ::rationale)
+(s/def ::rationale rationales)
 (s/def ::rationales (s/coll-of ::rationale :kind set?))
-(s/def ::organization nat-int?)
 (s/def ::locations (s/coll-of ::location))
 (s/def ::path (s/coll-of ::locations :kind vector?))
+(s/def ::index nat-int?)
 (s/def ::herd
   (s/with-gen
     (s/keys :req-un [::individuals
                      ::syndicates
                      ::stores
                      ::rationales
-                     ::location
-                     ::organization
-                     ::researching
+                     ::index
                      ::path])
-    #(g/fmap (fn [[individuals location rationale]]
+    #(g/fmap (fn [[individuals location]]
                {:individuals individuals
                 :syndicates #{}
                 :stores {}
                 :rationales #{}
-                :location location
-                :organization 0
-                :researching rationale
+                :index 0
                 :path [[location]]})
              (g/tuple
               (s/gen ::individuals)
-              (s/gen ::location)
-              (s/gen ::rationale)))))
+              (s/gen ::location)))))
 
 (defn death-chance [individual]
   (/ (+ 1 (:age individual)) 100))
@@ -166,3 +190,72 @@
                :skill ::skill)
   :ret nat-int?)
 
+(defn next-location [herd index]
+  (let [{:keys [path]} herd]
+    (assoc herd
+           :index index
+           :path (conj (rest path)
+                       (first path)))))
+
+(s/fdef next-location
+  :args (s/cat :herd ::herd
+               :index ::index)
+  :ret ::herd)
+
+(defn tally-votes [herd]
+  (->> (:individuals herd)
+       (map
+        (fn [individual]
+          (reduce
+           (fn [all [skill rank]]
+             (assoc all skill (if (contains? (:passions individual) skill)
+                                (* rank 2)
+                                rank)))
+           {}
+           (:skills individual))))
+       (reduce
+        (fn [votes vote]
+          (for [[skill value] votes]
+            [skill (+ value (get vote skill 0))]))
+        (for [skill skills]
+          [skill 0]))
+       (sort-by second >)))
+
+(defn rank-candidates [votes]
+  (let [leader (-> votes first first)]
+    (if-let [runner (-> votes second first)]
+      (conj (lazy-seq
+             (rank-candidates (rest votes)))
+            #{leader runner})
+      [])))
+
+(s/fdef rank-candidates
+  :args (s/cat :votes (s/coll-of (s/tuple ::skill nat-int?)))
+  :ret (s/coll-of ::syndicate))
+
+(defn select-candidate [syndicates candidates]
+  (if (contains? syndicates (first candidates))
+    (select-candidate syndicates (rest candidates))
+    (first candidates)))
+
+(s/fdef select-candidate
+  :args (s/cat :herd ::herd
+               :candidates (s/coll-of ::syndicate))
+  :ret ::syndicate)
+
+(defn add-syndicate [herd]
+  (let [votes (tally-votes herd)
+        candidates (rank-candidates votes)
+        candidate (select-candidate (:syndicates herd) candidates)]
+    (update herd :syndicates conj candidate)))
+
+(s/fdef add-syndicate
+  :args (s/cat :herd ::herd)
+  :ret ::herd)
+
+(defn remove-syndicate [herd]
+  (update herd :syndicates rest))
+
+(s/fdef remove-syndicate
+  :args (s/cat :herd ::herd)
+  :ret ::herd)
