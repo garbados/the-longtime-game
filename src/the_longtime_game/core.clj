@@ -5,27 +5,19 @@
 
 (def resources #{:food
                  :rations
-                 :poultice
+                 :poultices
                  :wood
                  :bone
                  :ore
+                 :metal
                  :tools})
 
-(def skills #{:sport
+(def skills #{:athletics
               :craftwork
               :geology
-              :zoology
               :herbalism
-              :granarism
               :medicine
               :organizing})
-
-(def skill-ranks ["unfamiliar"
-                  "novice"
-                  "learned"
-                  "adept"
-                  "expert"
-                  "virtuoso"])
 
 (def locations #{:plains
                  :forest
@@ -33,10 +25,31 @@
                  :swamp
                  :steppe
                  :mountain
-                 :shortcut
                  :elevator})
 
 (def traits #{:todo}) ; TODO
+
+(def crops #{:grapplewheat
+             :rattails
+             :drum-squash
+             :singe-pepper
+             :lorry-tops
+             :craunions})
+
+(def crop->nutrients
+  {:grapplewheat #{:n :k}
+   :rattails     #{:n :p}
+   :drum-squash  #{:p :k}
+   :singe-pepper #{:n}
+   :lorry-tops   #{:p}
+   :craunions    #{:k}})
+
+(def skill-ranks ["unfamiliar"
+                  "novice"
+                  "learned"
+                  "adept"
+                  "expert"
+                  "virtuoso"])
 
 (def skill->shortname
   {:sport      "spo"
@@ -65,15 +78,17 @@
   (string/join "-" [(rand-nth first-syllable)
                     (rand-nth second-syllable)]))
 
-(s/def ::name
-  (s/with-gen string?
+(s/def ::name string?)
+
+(s/def ::minot-name
+  (s/with-gen ::name
     #(g/fmap (partial string/join "-")
              (g/tuple (g/elements first-syllable)
                       (g/elements second-syllable)))))
 
 (s/fdef gen-name
   :args (s/cat)
-  :ret ::name)
+  :ret ::minot-name)
 
 (s/def ::age (s/int-in 0 100))
 (s/def ::passions (s/coll-of ::skill
@@ -100,6 +115,8 @@
 (s/def ::n ::nutrient)
 (s/def ::k ::nutrient)
 (s/def ::p ::nutrient)
+(s/def ::crop (s/nilable crops))
+(s/def ::wild? boolean?)
 (s/def ::flora (s/int-in 0 5))
 
 (s/def ::location
@@ -109,10 +126,13 @@
     :plains (s/keys :req-un [::infra
                              ::n
                              ::k
-                             ::p])
+                             ::p
+                             ::crop
+                             ::wild?])
     :forest (s/keys :req-un [::infra
                              ::flora])
-    :basic  (s/keys :req-un [::infra]))))
+    :basic  (s/keys :req-un [::infra])
+    :shortcut (s/keys :req-un []))))
 
 (s/def ::ethos (s/coll-of ::skill :kind set? :count 2))
 (s/def ::syndicate ::ethos)
@@ -123,6 +143,8 @@
 (s/def ::stores (s/map-of ::resource pos-int?))
 (s/def ::locations (s/coll-of ::location))
 (s/def ::path (s/coll-of ::locations :kind vector?))
+(s/def ::hunger (s/int-in 0 4)) ; 0, 1, 2, 3 => you lose
+(s/def ::sickness nat-int?)
 (s/def ::index nat-int?)
 (s/def ::month nat-int?)
 (s/def ::herd
@@ -130,6 +152,8 @@
     (s/keys :req-un [::individuals
                      ::syndicates
                      ::stores
+                     ::hunger
+                     ::sickness
                      ::index
                      ::month
                      ::path])
@@ -137,7 +161,10 @@
                {:individuals individuals
                 :syndicates #{}
                 :stores {}
+                :hunger 0
+                :sickness 0
                 :index 0
+                :month 0
                 :path [[location]]})
              (g/tuple
               (s/gen ::individuals)
@@ -163,22 +190,47 @@
   :ret (s/and string?
               #(string/ends-with? % "-syn")))
 
-(defn effective-skill [herd skill]
-  (int (* (->> (:individuals herd)
+(defn effective-skill
+  [{:keys [individuals syndicates hunger sickness]} skill]
+  (int (* (->> individuals
                (map :skills)
                (map #(get % skill 0))
                (reduce +))
-          (-> (->> (:syndicates herd)
+          (-> (->> syndicates
                    (reduce into [])
                    frequencies)
               (get skill 0)
               (* 1/2)
-              (+ 1/2)))))
+              (+ 1/2))
+          (if (> hunger 0)
+            (- 1 (/ hunger 4))
+            1)
+          (if (> sickness 0)
+            (max 0 (- 1 (/ sickness (count individuals))))
+            1))))
 
 (s/fdef effective-skill
   :args (s/cat :herd ::herd
                :skill ::skill)
   :ret nat-int?)
+
+(defn location-upkeep
+  [{:keys [individuals stores] :as herd}]
+  (let [{:keys [food rations poultices]} stores
+        need (count individuals)
+        food-deficit (max 0 (- need food))
+        new-rations (- rations food-deficit)
+        hunger? (> 0 new-rations)
+        poultice-deficit (max 0 (- need poultices))
+        sickness? (> 0 poultice-deficit)]
+    (cond-> herd
+      hunger? (update :hunger inc)
+      (not hunger?) (assoc :hunger 0)
+      sickness? (assoc :sickness poultice-deficit))))
+
+(s/fdef location-upkeep
+  :args (s/cat :herd ::herd)
+  :ret ::herd)
 
 (defn next-location [herd index]
   (let [{:keys [path]} herd]
@@ -312,7 +364,9 @@
                 :infra #{}
                 :n 2
                 :k 2
-                :p 2}]
+                :p 2
+                :crop nil
+                :wild? false}]
               [{:type :forest
                 :infra #{}
                 :flora 2}]
@@ -337,4 +391,27 @@
 
 (s/fdef gen-herd
   :args (s/cat)
+  :ret ::herd)
+
+(s/def ::uses (s/coll-of ::skill))
+(s/def ::terrain locations)
+(s/def ::filter
+  (s/keys :req-un [::terrain
+                   ::skills
+                   ::stores]))
+(s/def ::effect
+  (s/fspec :args (s/cat :herd ::herd
+                        :skill nat-int?)
+           :ret ::herd))
+(s/def ::project (s/keys :req-un [::name
+                                  ::uses
+                                  ::filter
+                                  ::effect]))
+
+(defn enact-project [herd project]
+  )
+
+(s/fdef enact-project
+  :args (s/cat :herd ::herd
+               :project ::project)
   :ret ::herd)
