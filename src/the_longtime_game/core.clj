@@ -19,13 +19,13 @@
               :medicine
               :organizing})
 
-(def locations #{:plains
-                 :forest
-                 :jungle
-                 :swamp
-                 :steppe
-                 :mountain
-                 :elevator})
+(def terrains #{:plains
+                :forest
+                :jungle
+                :swamp
+                :steppe
+                :mountain
+                :elevator})
 
 (def traits #{:todo}) ; TODO
 
@@ -108,7 +108,7 @@
                    ::skills
                    ::fulfillment]))
 
-(s/def ::type locations)
+(s/def ::type terrains)
 (s/def ::infrastructure infrastructure)
 (s/def ::infra (s/coll-of ::infrastructure :kind set?))
 (s/def ::nutrient nat-int?)
@@ -187,7 +187,7 @@
 
 (s/fdef syndicate-name
   :args (s/cat :ethos ::ethos)
-  :ret (s/and string?
+  :ret (s/and ::name
               #(string/ends-with? % "-syn")))
 
 (defn effective-skill
@@ -394,7 +394,7 @@
   :ret ::herd)
 
 (s/def ::uses (s/coll-of ::skill))
-(s/def ::terrain locations)
+(s/def ::terrain (s/nilable terrains))
 (s/def ::filter
   (s/keys :req-un [::terrain
                    ::skills
@@ -403,15 +403,76 @@
   (s/fspec :args (s/cat :herd ::herd
                         :skill nat-int?)
            :ret ::herd))
+(s/def ::filter-fn
+  (s/fspec
+   :args (s/cat :herd ::herd
+                :location ::type)
+   :ret boolean?))
+(s/def ::location-effect
+  (s/fspec :args (s/cat :location ::location)
+           :ret ::location))
 (s/def ::project (s/keys :req-un [::name
                                   ::uses
                                   ::filter
-                                  ::effect]))
+                                  ::effect]
+                         :opt-un [::filter-fn
+                                  ::location-effect]))
 
-(defn enact-project [herd project]
-  )
+(defn can-enact?
+  [herd location project]
+  (and (if-let [terrain (get-in project [:filter :terrain])]
+         (= (:type location) terrain)
+         true)
+       (reduce
+        (fn [ok? [resource required]]
+          (let [amount (get-in herd [:stores resource])]
+            (and ok?
+                 (>= amount required))))
+        true
+        (get-in project [:filter :stores]))
+       (reduce
+        (fn [ok? [skill required]]
+          (and ok?
+               (>= (effective-skill herd skill)
+                   required)))
+        true
+        (get-in project [:filter :skills]))
+       (if-let [filter-fn (:filter-fn project)]
+         (filter-fn herd location)
+         true)))
+
+(s/fdef can-enact?
+  :args (s/cat :herd ::herd
+               :location ::location
+               :project ::project)
+  :ret boolean?)
+
+(defn enact-project
+  [herd location {:keys [uses effect location-effect]}]
+  (let [skill (/ (reduce + (map (partial effective-skill herd) uses)) (count uses))]
+    [(effect herd skill)
+     (if location-effect
+       (location-effect location)
+       location)]))
 
 (s/fdef enact-project
   :args (s/cat :herd ::herd
+               :location ::location
                :project ::project)
+  :ret (s/tuple ::herd ::location))
+
+(defn distribute-experience
+  [herd {:keys [uses]}]
+  'todo)
+
+(s/fdef distribute-experience
+  :args (s/cat :herd ::herd)
+  :ret ::herd)
+
+(defn distribute-fulfillment
+  [herd {:keys [uses]}]
+  'todo)
+
+(s/fdef distribute-fulfillment
+  :args (s/cat :herd ::herd)
   :ret ::herd)
