@@ -8,6 +8,7 @@
                  :poultices
                  :wood
                  :bone
+                 :stone
                  :ore
                  :metal
                  :tools})
@@ -113,7 +114,7 @@
                              :min-count 0
                              :max-count max-passions))
 (s/def ::skill skills)
-(s/def ::skills (s/map-of ::skill (s/int-in 0 max-skill)))
+(s/def ::skills (s/map-of ::skill nat-int?))
 (s/def ::trait traits)
 (s/def ::traits (s/coll-of ::trait :kind set?))
 (s/def ::fulfillment (s/int-in 0 max-fulfillment))
@@ -124,6 +125,126 @@
                    ::passions
                    ::skills
                    ::fulfillment]))
+(s/def ::individuals (s/coll-of ::individual))
+
+(defn inc-some-skill [skills*]
+  (let [skill (rand-nth (vec skills))
+        rank (get skills* skill 0)]
+    (if (= rank 5)
+      (inc-some-skill skills*)
+      (assoc skills* skill (inc rank)))))
+
+(s/fdef inc-some-skill
+  :args (s/cat :skills ::skills
+               :candidates (s/coll-of ::skill))
+  :ret ::skills)
+
+(defn gen-individual []
+  (let [age (+ 1 (rand-int max-age))
+        base-skills (int (/ age 10))]
+    {:name (gen-name)
+     :age age
+     :fulfillment 50
+     :traits (set [(first (shuffle traits))])
+     :passions (set (take (+ 1 (rand-int 2))
+                          (shuffle (vec skills))))
+     :skills (reduce
+              (fn [skills _]
+                (inc-some-skill skills))
+              {}
+              (range base-skills))}))
+
+(s/fdef gen-individual
+  :args (s/cat)
+  :ret ::individual)
+
+(defn gen-individuals [n]
+  (for [_ (range n)]
+    (gen-individual)))
+
+(s/fdef gen-individuals
+  :args (s/cat :n (s/int-in 1 500))
+  :ret ::individuals)
+
+(s/def ::ethos (s/coll-of ::skill :kind set? :count 2))
+(s/def ::syndicate ::ethos)
+(s/def ::syndicates (s/coll-of ::syndicate :kind set?))
+
+(defn calculate-vote [individual skill]
+  (let [rank (get-in individual [:skills skill] 0)]
+    (if (contains? (:passions individual) skill)
+      (* rank 2)
+      rank)))
+
+(s/fdef calculate-vote
+  :args (s/cat :individual ::individual
+               :skill ::skill)
+  :ret nat-int?)
+
+(defn tally-votes [individuals]
+  (->> individuals
+       (map
+        (fn [individual]
+          (reduce
+           (fn [all skill]
+             (assoc all skill
+                    (calculate-vote individual skill)))
+           {}
+           skills)))
+       (reduce
+        (fn [votes vote]
+          (for [[skill value] votes]
+            [skill (+ value (get vote skill 0))]))
+        (for [skill skills]
+          [skill 0]))
+       (sort-by second >)))
+
+(s/fdef tally-votes
+  :args (s/cat :individuals ::individuals)
+  :ret (s/coll-of (s/tuple ::skill nat-int?)))
+
+(defn rank-candidates [votes]
+  (let [leader (-> votes first first)]
+    (if-let [runner (-> votes second first)]
+      (if (not= leader runner)
+        (conj (lazy-seq
+               (rank-candidates (rest votes)))
+              #{leader runner})
+        [])
+      [])))
+
+(s/fdef rank-candidates
+  :args (s/cat :votes (s/coll-of (s/tuple ::skill nat-int?)))
+  :ret (s/coll-of ::syndicate))
+
+(defn select-candidate [syndicates candidates]
+  (if (contains? syndicates (first candidates))
+    (select-candidate syndicates (rest candidates))
+    (first candidates)))
+
+(s/fdef select-candidate
+  :args (s/cat :herd ::herd
+               :candidates (s/coll-of ::syndicate))
+  :ret (s/nilable ::syndicate))
+
+(defn add-syndicate [{:keys [individuals syndicates] :as herd}]
+  (let [votes (tally-votes individuals)
+        candidates (rank-candidates votes)]
+    (if-let [candidate (select-candidate syndicates candidates)]
+      (update herd :syndicates conj candidate)
+      herd))) ; do not modify herd if there is no valid candidate
+
+(s/fdef add-syndicate
+  :args (s/cat :herd (s/keys :req-un [::individuals
+                                      ::syndicates]))
+  :ret (s/keys :req-un [::syndicates]))
+
+(defn remove-syndicate [herd]
+  (update herd :syndicates (comp set rest)))
+
+(s/fdef remove-syndicate
+  :args (s/cat :herd (s/keys :req-un [::syndicates]))
+  :ret (s/keys :req-un [::syndicates]))
 
 (s/def ::type terrains)
 (s/def ::infrastructure infrastructure)
@@ -138,29 +259,11 @@
 (s/def ::flora (s/int-in 0 5))
 (s/def ::depleted? boolean?)
 
-(s/def ::location
-  (s/and
-   (s/keys :req-un [::type])
-   (s/or
-    :plains (s/keys :req-un [::infra
-                             ::n
-                             ::k
-                             ::p
-                             ::crop
-                             ::wild?
-                             ::ready?])
-    :forest (s/keys :req-un [::infra
-                             ::flora
-                             ::depleted?])
-    :swamp (s/keys :req-un [::infra
-                            ::depleted?])
-    :basic  (s/keys :req-un [::infra])
-    :shortcut (s/keys :req-un []))))
-
 (defn init-location [terrain]
   (case terrain
     :plains
-    {:infra #{}
+    {:type :plains
+     :infra #{}
      :n 2
      :k 2
      :p 2
@@ -168,24 +271,49 @@
      :wild? false
      :ready? nil}
     :forest
-    {:infra #{}
+    {:type :forest
+     :infra #{}
      :flora 1
      :depleted? false}
     :mountain
-    {:infra #{}}
+    {:type :mountain
+     :infra #{}}
     :steppe
-    {}
+    {:type :steppe}
     :swamp
-    {:infra #{}
+    {:type :swamp
+     :infra #{}
      :depleted? false}
     :jungle
-    {:infra #{}}))
+    {:type :jungle
+     :infra #{}}))
 
-(s/def ::ethos (s/coll-of ::skill :kind set? :count 2))
-(s/def ::syndicate ::ethos)
+(s/def ::location
+  (s/with-gen
+    (s/and
+     (s/keys :req-un [::type])
+     (s/or
+      :plains (s/keys :req-un [::infra
+                               ::n
+                               ::k
+                               ::p
+                               ::crop
+                               ::wild?
+                               ::ready?])
+      :forest (s/keys :req-un [::infra
+                               ::flora
+                               ::depleted?])
+      :swamp (s/keys :req-un [::infra
+                              ::depleted?])
+      :basic  (s/keys :req-un [::infra])
+      :shortcut (s/keys :req-un [])))
+    #(g/fmap init-location
+             (s/gen terrains))))
 
-(s/def ::syndicates (s/coll-of ::syndicate :kind set?))
-(s/def ::individuals (s/coll-of ::individual))
+(s/fdef init-location
+  :args (s/cat :terrain terrains)
+  :ret ::location)
+
 (s/def ::resource resources)
 (s/def ::stores (s/map-of ::resource pos-int?))
 (s/def ::locations (s/coll-of ::location :min-count 1))
@@ -194,6 +322,40 @@
 (s/def ::sickness nat-int?)
 (s/def ::index nat-int?)
 (s/def ::month nat-int?)
+
+(defn gen-herd
+  ([]
+   (gen-herd {:hunger 0
+              :sickness 0
+              :month 0}))
+  ([{:keys [hunger sickness month]}]
+   (let [individuals (gen-individuals (rand-int 50))
+         {:keys [syndicates]}
+         (-> {:individuals individuals
+              :syndicates #{}}
+             add-syndicate
+             (update :syndicates conj
+                     (set (take 2 (shuffle (vec skills))))))]
+     (gen-herd individuals syndicates {:hunger hunger
+                                       :sickness sickness
+                                       :month month})))
+  ([individuals syndicates {:keys [hunger sickness month]}]
+   {:individuals individuals
+    :syndicates syndicates
+    :stores (reduce
+             (fn [all resource]
+               (assoc all resource 50))
+             {}
+             resources)
+    :hunger hunger
+    :sickness sickness
+    :index 0
+    :month month
+    :path [[(init-location :plains)]
+           [(init-location :forest)]
+           [(init-location :mountain)]
+           [(init-location :steppe)]]}))
+
 (s/def ::herd
   (s/with-gen
     (s/keys :req-un [::individuals
@@ -204,7 +366,7 @@
                      ::index
                      ::month
                      ::path])
-    #(g/fmap (fn [[individuals syndicates path]]
+    #(g/fmap (fn [[individuals syndicates]]
                {:individuals individuals
                 :syndicates syndicates
                 :stores (reduce
@@ -216,11 +378,13 @@
                 :sickness 0
                 :index 0
                 :month 0
-                :path path})
+                :path [[(init-location :plains)]
+                       [(init-location :forest)]
+                       [(init-location :mountain)]
+                       [(init-location :steppe)]]})
              (g/tuple
               (s/gen ::individuals)
-              (s/gen ::syndicates)
-              (s/gen ::path)))))
+              (s/gen ::syndicates)))))
 
 (defn local-infra? [herd infra]
   (let [location (get-in herd [:path 0 (:index herd)])]
@@ -257,10 +421,11 @@
 
 (defn effective-skill
   [{:keys [individuals syndicates hunger sickness]} skill]
-  (int (* (->> individuals
-               (map :skills)
-               (map #(get % skill 0))
-               (reduce +))
+  (int (* (+ (->> individuals
+                  (map :skills)
+                  (map #(get % skill 0))
+                  (reduce +))
+             (count individuals))
           (-> (->> syndicates
                    (reduce into [])
                    frequencies)
@@ -330,156 +495,6 @@
                :index ::index)
   :ret ::herd)
 
-(defn calculate-vote [individual skill]
-  (let [rank (get-in individual [:skills skill] 0)]
-    (if (contains? (:passions individual) skill)
-      (* rank 2)
-      rank)))
-
-(s/fdef calculate-vote
-  :args (s/cat :individual ::individual
-               :skill ::skill)
-  :ret nat-int?)
-
-(defn tally-votes [individuals]
-  (->> individuals
-       (map
-        (fn [individual]
-          (reduce
-           (fn [all skill]
-             (assoc all skill
-                    (calculate-vote individual skill)))
-           {}
-           skills)))
-       (reduce
-        (fn [votes vote]
-          (for [[skill value] votes]
-            [skill (+ value (get vote skill 0))]))
-        (for [skill skills]
-          [skill 0]))
-       (sort-by second >)))
-
-(s/fdef tally-votes
-  :args (s/cat :individuals ::individuals)
-  :ret (s/coll-of (s/tuple ::skill nat-int?)))
-
-(defn rank-candidates [votes]
-  (let [leader (-> votes first first)]
-    (if-let [runner (-> votes second first)]
-      (if (not= leader runner)
-        (conj (lazy-seq
-               (rank-candidates (rest votes)))
-              #{leader runner})
-        [])
-      [])))
-
-(s/fdef rank-candidates
-  :args (s/cat :votes (s/coll-of (s/tuple ::skill nat-int?)))
-  :ret (s/coll-of ::syndicate))
-
-(defn select-candidate [syndicates candidates]
-  (if (contains? syndicates (first candidates))
-    (select-candidate syndicates (rest candidates))
-    (first candidates)))
-
-(s/fdef select-candidate
-  :args (s/cat :herd ::herd
-               :candidates (s/coll-of ::syndicate))
-  :ret (s/nilable ::syndicate))
-
-(defn add-syndicate [{:keys [individuals syndicates] :as herd}]
-  (let [votes (tally-votes individuals)
-        candidates (rank-candidates votes)]
-    (if-let [candidate (select-candidate syndicates candidates)]
-      (update herd :syndicates conj candidate)
-      herd))) ; do not modify herd if there is no valid candidate
-
-(s/fdef add-syndicate
-  :args (s/cat :herd ::herd)
-  :ret ::herd)
-
-(defn remove-syndicate [herd]
-  (update herd :syndicates (comp set rest)))
-
-(s/fdef remove-syndicate
-  :args (s/cat :herd ::herd)
-  :ret ::herd)
-
-(defn inc-some-skill [skills*]
-  (let [skill (rand-nth (vec skills))
-        rank (get skills* skill 0)]
-    (if (= rank 5)
-      (inc-some-skill skills*)
-      (assoc skills* skill (inc rank)))))
-
-(s/fdef inc-some-skill
-  :args (s/cat :skills ::skills
-               :candidates (s/coll-of ::skill))
-  :ret ::skills)
-
-(defn gen-individual []
-  (let [age (+ 1 (rand-int max-age))
-        base-skills (int (/ age 10))]
-    {:name (gen-name)
-     :age age
-     :fulfillment 50
-     :traits (set [(first (shuffle traits))])
-     :passions (set (take (+ 1 (rand-int 2))
-                          (shuffle (vec skills))))
-     :skills (reduce
-              (fn [skills _]
-                (inc-some-skill skills))
-              {}
-              (range base-skills))}))
-
-(s/fdef gen-individual
-  :args (s/cat)
-  :ret ::individual)
-
-(defn gen-individuals [n]
-  (for [_ (range n)]
-    (gen-individual)))
-
-(s/fdef gen-individuals
-  :args (s/cat :n (s/int-in 1 500))
-  :ret ::individuals)
-
-(defn gen-herd []
-  (let [individuals (gen-individuals 50)
-        path [[{:type :plains
-                :infra #{}
-                :n 2
-                :k 2
-                :p 2
-                :crop nil
-                :wild? false}]
-              [{:type :forest
-                :infra #{}
-                :flora 2
-                :depleted? false}]
-              [{:type :mountain
-                :infra #{}}]
-              [{:type :steppe}]]]
-    (-> {:individuals individuals
-         :syndicates #{}
-         :path path
-         :stores (reduce
-                  (fn [all resource]
-                    (assoc all resource 50))
-                  {}
-                  resources)
-         :index 0
-         :month 0}
-        ;; add one syndicate by vote
-        add-syndicate
-        ;; and another by chance
-        (update :syndicates conj
-                (set (take 2 (shuffle (vec skills))))))))
-
-(s/fdef gen-herd
-  :args (s/cat)
-  :ret ::herd)
-
 (s/def ::uses (s/coll-of ::skill))
 (s/def ::terrain (s/nilable terrains))
 (s/def ::filter
@@ -488,17 +503,21 @@
                    ::skills
                    ::stores]))
 (s/def ::effect
-  (s/fspec :args (s/cat :herd ::herd
-                        :skill nat-int?)
-           :ret ::herd))
+  (s/or :fn ifn?
+        :fn* (s/fspec :args (s/cat :herd ::herd
+                                   :skill nat-int?)
+                      :ret ::herd)))
 (s/def ::filter-fn
-  (s/fspec
-   :args (s/cat :herd ::herd
-                :location ::type)
-   :ret boolean?))
+  (s/or :fn ifn?
+        :fn* (s/fspec
+              :args (s/cat :herd ::herd
+                           :location ::location)
+              :ret boolean?)))
 (s/def ::location-effect
-  (s/fspec :args (s/cat :location ::location)
-           :ret ::location))
+  (s/or :fn ifn?
+        :fn* (s/fspec
+              :args (s/cat :location ::location)
+              :ret ::location)))
 (s/def ::project (s/keys :req-un [::name
                                   ::uses]
                          :opt-un [::filter
@@ -507,30 +526,31 @@
                                   ::location-effect]))
 
 (defn can-enact?
-  [herd location project]
-  (and (if-let [terrain (get-in project [:filter :terrain])]
-         (= (:type location) terrain)
-         true)
-       (if-let [season (get-in project [:filter :season])]
-         (= (get-season herd) season)
-         true)
-       (reduce
-        (fn [ok? [resource required]]
-          (let [amount (get-in herd [:stores resource])]
+  [herd project]
+  (let [location (get-in herd [:path 0 (:index herd)])]
+    (and (if-let [terrain (get-in project [:filter :terrain])]
+           (= (:type location) terrain)
+           true)
+         (if-let [season (get-in project [:filter :season])]
+           (= (get-season herd) season)
+           true)
+         (reduce
+          (fn [ok? [resource required]]
+            (let [amount (get-in herd [:stores resource])]
+              (and ok?
+                   (>= amount required))))
+          true
+          (get-in project [:filter :stores] []))
+         (reduce
+          (fn [ok? [skill required]]
             (and ok?
-                 (>= amount required))))
-        true
-        (get-in project [:filter :stores] []))
-       (reduce
-        (fn [ok? [skill required]]
-          (and ok?
-               (>= (effective-skill herd skill)
-                   required)))
-        true
-        (get-in project [:filter :skills] []))
-       (if-let [filter-fn (:filter-fn project)]
-         (filter-fn herd location)
-         true)))
+                 (>= (effective-skill herd skill)
+                     required)))
+          true
+          (get-in project [:filter :skills] []))
+         (if-let [filter-fn (:filter-fn project)]
+           (filter-fn herd location)
+           true))))
 
 (s/fdef can-enact?
   :args (s/cat :herd ::herd
@@ -669,6 +689,7 @@
   [nutrients amount location]
   (reduce
    (fn [location nutrient]
+     (println nutrient)
      (-> location
          (update nutrient - amount)
          (update nutrient max 0)))
@@ -749,110 +770,102 @@
         3 (map-locations enter-winter herd))
       herd*)))
 
-(def crop-projects
-  (map
-   (fn [crop]
-     (let [[nutrients amount] (crop-info crop)]
-       [{:name (str "Plant " (name crop))
-         :uses [:herbalism]
-         :filter (cond-> {:terrain :plains
-                          :season 1}
-                   (= 3 amount)
-                   (merge {:skills {:herbalism 100}}))
-         :filter-fn
-         (fn [_ location]
-           (every? true? (map #(>= (get location %) amount) nutrients)))
-         :location-effect
-         #(-> (update-nutrients nutrients amount %)
-              (assoc :crop crop
-                     :wild? false
-                     :ready? false))}]))
-   crops))
-
-(def construction-projects
-  (map (fn [[infra skill required-skill stores terrain]]
-         (let [uses (if (and skill (not= skill :craftwork))
-                      [:craftwork skill]
-                      [:craftwork])]
-           {:name (str "Construct " (name infra))
-            :uses uses
-            :filter
-            (cond-> {:stores stores
-                     :skills (if required-skill
-                               (reduce
-                                (fn [all skill]
-                                  (assoc all skill required-skill))
-                                {}
-                                uses)
-                               {})}
-              terrain (assoc :terrain terrain))
-            :filter-fn
-            (fn [_ location]
-              (> max-infrastructure (count (:infra location))))
-            :location-effect
-            (fn [location]
-              (update location :infra conj infra))}))
-       [[:granary
-         :herbalism
-         100
-         {:wood 10 :stone 10 :tools 10}]
-        [:stadium
-         :athletics
-         100
-         {:wood 20 :stone 0 :tools 5}]
-        [:observatory
-         :organizing
-         100
-         {:wood 10 :stone 10 :tools 10}]
-        [:quarry
-         :geology
-         100
-         {:wood 10 :stone 50 :tools 20}]
-        [:kitchen
-         :medicine
-         100
-         {:wood 10 :stone 10 :tools 10}]
-        [:workshop
-         :craftwork
-         100
-         {:wood 10 :stone 10 :tools 10}]
-        [:wind-forge
-         :craftwork
-         500
-         {:wood 100 :stone 100 :tools 100}
-         :jungle]
-        [:temple
-         :organizing
-         500
-         {:wood 100 :stone 100 :tools 100}]
-        [:hospital
-         :medicine
-         100
-         {:wood 10 :stone 10 :tools 10}]]))
-
-(def manufacture-projects
-  (map
-   (fn [[i material]]
-     {:name (str "Manufacture " (name material) " tools")
-      :uses [:craftwork]
-      :filter (assoc {} material 50)
-      :effect
-      (fn [herd skill-amount]
-        (let [workshop? (local-infra? herd :workshop)
-              amount (-> (if workshop?
-                           skill-amount
-                           (/ skill-amount 2))
-                         (* i)
-                         int)]
-          (update-in herd [:stores :tools] + amount)))})
-   [[1 :stone]
-    [2 :bone]
-    [4 :metal]]))
-
 (def projects
-  (concat crop-projects
-          construction-projects
-          manufacture-projects
+  (concat (map
+           (fn [crop]
+             (let [[nutrients amount] (crop-info crop)]
+               {:name (str "Plant " (name crop))
+                :uses [:herbalism]
+                :filter (cond-> {:terrain :plains
+                                 :season 1}
+                          (= 3 amount)
+                          (merge {:skills {:herbalism 100}}))
+                :filter-fn
+                (fn [_ location]
+                  (every? true? (map #(>= (get location %) amount) nutrients)))
+                :location-effect
+                (fn [location]
+                  (-> (update-nutrients nutrients amount location)
+                      (assoc :crop crop
+                             :wild? false
+                             :ready? false)))}))
+           crops)
+          (map (fn [[infra skill required-skill stores terrain]]
+                 (let [uses (if (and skill (not= skill :craftwork))
+                              [:craftwork skill]
+                              [:craftwork])]
+                   {:name (str "Construct " (name infra))
+                    :uses uses
+                    :filter
+                    (cond-> {:stores stores
+                             :skills (if required-skill
+                                       (reduce
+                                        (fn [all skill]
+                                          (assoc all skill required-skill))
+                                        {}
+                                        uses)
+                                       {})}
+                      terrain (assoc :terrain terrain))
+                    :filter-fn
+                    (fn [_ location]
+                      (> max-infrastructure (count (:infra location))))
+                    :location-effect
+                    (fn [location]
+                      (update location :infra conj infra))}))
+               [[:granary
+                 :herbalism
+                 100
+                 {:wood 10 :stone 10 :tools 10}]
+                [:stadium
+                 :athletics
+                 100
+                 {:wood 20 :tools 5}]
+                [:observatory
+                 :organizing
+                 100
+                 {:wood 10 :stone 10 :tools 10}]
+                [:quarry
+                 :geology
+                 100
+                 {:wood 10 :stone 50 :tools 20}]
+                [:kitchen
+                 :medicine
+                 100
+                 {:wood 10 :stone 10 :tools 10}]
+                [:workshop
+                 :craftwork
+                 100
+                 {:wood 10 :stone 10 :tools 10}]
+                [:wind-forge
+                 :craftwork
+                 500
+                 {:wood 100 :stone 100 :tools 100}
+                 :jungle]
+                [:temple
+                 :organizing
+                 500
+                 {:wood 100 :stone 100 :tools 100}]
+                [:hospital
+                 :medicine
+                 100
+                 {:wood 10 :stone 10 :tools 10}]])
+          (map
+           (fn [[i material]]
+             {:name (str "Manufacture " (name material) " tools")
+              :uses [:craftwork]
+              :filter (assoc {} material 50)
+              :effect
+              (fn [herd skill-amount]
+                (let [workshop? (local-infra? herd :workshop)
+                      amount (-> (if workshop?
+                                   skill-amount
+                                   (/ skill-amount 2))
+                                 (* i)
+                                 int)]
+                  (update-in herd [:stores :tools] + amount)))})
+           [[1 :stone]
+            [2 :bone]
+            [4 :metal]])
           [{:name "Explore"
             :uses []
             :effect
@@ -885,19 +898,30 @@
             #(assoc %
                     :crop nil
                     :ready? false)}
-           {:name "Hold festival"
-            :uses [:athletics :organizing]
-            :filter-fn
-            (fn [herd _]
-              (> (get-in herd [:stores :food] 0)
-                 (count (:individuals herd))))
-            :effect
-            (fn [herd skill-amount]
-              (let [stadium? (local-infra? herd :stadium)
-                    modifier (if stadium? 25 50)
-                    amount (int (/ skill-amount modifier))]
-                (update herd :individuals
-                        (partial map #(inc-fulfillment % amount)))))}
+           (let [need 50]
+             {:name "Hold festival"
+              :uses [:athletics :organizing]
+              :filter-fn
+              (fn [herd _]
+                (> (+ (get-in herd [:stores :food] 0)
+                      (get-in herd [:stores :rations] 0))
+                   need))
+              :effect
+              (fn [herd skill-amount]
+                (let [stadium? (local-infra? herd :stadium)
+                      modifier (if stadium? 25 50)
+                      amount (int (/ skill-amount modifier))
+                      remaining-food (- (get-in herd [:stores :food] 0) need)
+                      remaining-rations
+                      (if (< remaining-food 0)
+                        (+ (get-in herd [:stores :rations] 0)
+                           remaining-food)
+                        (get-in herd [:stores :rations]))]
+                  (-> herd
+                      (update :individuals
+                              (partial map #(inc-fulfillment % amount)))
+                      (assoc-in [:stores :food] (max 0 remaining-food))
+                      (assoc-in [:stores :rations] (max 0 remaining-rations)))))})
            {:name "Gather deadfall"
             :uses [:herbalism]
             :filter {:terrain :forest}
@@ -949,12 +973,51 @@
             :effect
             (fn [herd skill-amount]
               (update-in herd [:stores :metal] + skill-amount))}
-           {:name "Produce poultices"}
-           {:name "Produce rations"}
-           {:name "Gather stones"}
-           {:name "Gather bog-iron"}
-           {:name "Spelunk"}
-           {:name "Stargaze"}]))
+           {:name "Produce poultices"
+            :uses [:medicine]
+            :filter {:stores {:food 50}}
+            :effect
+            (fn [herd skill-amount]
+              (update-in herd [:stores :poultices] + skill-amount))}
+           {:name "Produce rations"
+            :uses [:medicine]
+            :filter {:stores {:food 50}}
+            :effect
+            (fn [herd skill-amount]
+              (update-in herd [:stores :rations] + skill-amount))}
+           {:name "Gather stones"
+            :uses [:geology]
+            :effect
+            (fn [herd skill-amount]
+              (-> herd
+                  (update-in [:stores :stone] + (* skill-amount 3/4))
+                  (update-in [:stores :ore] + (* skill-amount 1/4))))}
+           {:name "Gather bog-iron"
+            :uses [:geology]
+            :filter {:terrain :swamp}
+            :effect
+            (fn [herd skill-amount]
+              (update-in herd [:stores :ore] + skill-amount))
+            :location-effect
+            (fn [location]
+              (assoc location :depleted? true))}
+           {:name "Spelunk"
+            :uses [:geology :athletics]
+            :filter {:terrain :mountain
+                     :stores {:tools 10}}
+            :effect
+            (fn [herd skill-amount]
+              (update-in herd [:stores :ore] + skill-amount))}
+           {:name "Stargaze"
+            :uses [:organizing]
+            :filter {:terrain :mountain}
+            :effect
+            (fn [herd skill-amount]
+              (let [observatory? (local-infra? herd :observatory)
+                    modifier (if observatory? 25 50)
+                    amount (int (/ skill-amount modifier))]
+                (update herd :individuals
+                        (partial map #(inc-fulfillment % amount)))))}]))
 
 (defn pre-location [herd]
   (inc-month herd))
