@@ -5,22 +5,33 @@
 
 (deftest spec-tests
   (doseq [sym [`core/gen-name
-               `core/death-chance
+               `core/inc-some-skill
+               `core/gen-individual
+               `core/gen-individuals
                `core/syndicate-name
-               `core/effective-skill
-               `core/next-location
                `core/calculate-vote
                `core/tally-votes
                `core/rank-candidates
                `core/select-candidate
                `core/add-syndicate
                `core/remove-syndicate
-               `core/inc-some-skill
-               `core/gen-individual
-               `core/gen-individuals
+               `core/init-location
                `core/gen-herd
+               `core/death-chance
+               `core/died?
+               `core/local-infra?
+               `core/get-season
+               `core/effective-skill
+               `core/collective-labor
+               `core/apply-herd-upkeep
+               `core/map-locations
+               `core/has-lost?
+               `core/next-location
+               `core/can-enact?
+               ; `core/enact-project ; TODO test manually
                ]]
     (testing (str sym)
+      (println (str "Testing: " sym))
       (let [{:keys [failure]}
             (-> sym stest/check first stest/abbrev-result)]
         (is (nil? failure) failure)))))

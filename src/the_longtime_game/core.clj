@@ -44,6 +44,7 @@
                   "virtuoso"])
 
 (def max-age 100)
+(def optimal-pops-per-stage 100)
 (def max-hunger 4)
 (def max-infrastructure 4)
 (def max-skill (count skill-ranks))
@@ -108,7 +109,7 @@
   :args (s/cat)
   :ret ::minot-name)
 
-(s/def ::age (s/int-in 0 max-age))
+(s/def ::age pos-int?)
 (s/def ::passions (s/coll-of ::skill
                              :kind set?
                              :min-count 0
@@ -169,6 +170,17 @@
 (s/def ::ethos (s/coll-of ::skill :kind set? :count 2))
 (s/def ::syndicate ::ethos)
 (s/def ::syndicates (s/coll-of ::syndicate :kind set?))
+
+(defn syndicate-name [ethos]
+  (as-> (vec (map skill->shortname ethos)) $
+    (vec $)
+    (conj $ "syn")
+    (string/join "-" $)))
+
+(s/fdef syndicate-name
+  :args (s/cat :ethos ::ethos)
+  :ret (s/and ::name
+              #(string/ends-with? % "-syn")))
 
 (defn calculate-vote [individual skill]
   (let [rank (get-in individual [:skills skill] 0)]
@@ -386,6 +398,40 @@
               (s/gen ::individuals)
               (s/gen ::syndicates)))))
 
+(defn birth-chance
+  [{:keys [hunger sickness individuals path]}]
+  (let [stages (count path)
+        optimal (* optimal-pops-per-stage stages)
+        population (count individuals)
+        diff (/ (- optimal population) optimal-pops-per-stage)
+        chance (* diff
+                  (- 1 (/ hunger max-hunger))
+                  (- 1 (/ sickness population)))
+        births (rand-int (int (* 2 chance)))]
+    births))
+
+(defn death-chance
+  [{:keys [hunger sickness individuals]} {:keys [age]}]
+  (* (/ age max-age)
+     (+ 1 (/ hunger max-hunger))
+     (+ 1 (/ sickness (count individuals)))))
+
+(s/fdef death-chance
+  :args (s/cat :herd ::herd
+               :individual ::individual)
+  :ret (s/and number? #(>= % 0)))
+
+(defn died?
+  [herd individual]
+  (->> (death-chance herd individual)
+       (* (rand-int max-age))
+       (> max-age)))
+
+(s/fdef died?
+  :args (s/cat :herd ::herd
+               :individual ::individual)
+  :ret boolean?)
+
 (defn local-infra? [herd infra]
   (let [location (get-in herd [:path 0 (:index herd)])]
     (contains? (:infra location) infra)))
@@ -399,33 +445,12 @@
   :args (s/cat :herd ::herd)
   :ret ::season)
 
-(defn death-chance [individual]
-  (/ (+ 1 (:age individual)) 100))
-
-(s/fdef death-chance
-  :args (s/cat :individual ::individual)
-  :ret (s/and number? #(>= % 0)))
-
-(def birth-chance 1/10)
-
-(defn syndicate-name [ethos]
-  (as-> (vec (map skill->shortname ethos)) $
-    (vec $)
-    (conj $ "syn")
-    (string/join "-" $)))
-
-(s/fdef syndicate-name
-  :args (s/cat :ethos ::ethos)
-  :ret (s/and ::name
-              #(string/ends-with? % "-syn")))
-
 (defn effective-skill
   [{:keys [individuals syndicates hunger sickness]} skill]
-  (int (* (+ (->> individuals
-                  (map :skills)
-                  (map #(get % skill 0))
-                  (reduce +))
-             (count individuals))
+  (int (* (->> individuals
+               (map :skills)
+               (map #(get % skill 0))
+               (reduce +))
           (-> (->> syndicates
                    (reduce into [])
                    frequencies)
@@ -440,6 +465,16 @@
             1))))
 
 (s/fdef effective-skill
+  :args (s/cat :herd ::herd
+               :skill ::skill)
+  :ret nat-int?)
+
+(defn collective-labor
+  [herd skill]
+  (+ (effective-skill herd skill)
+     (count (:individuals herd))))
+
+(s/fdef collective-labor
   :args (s/cat :herd ::herd
                :skill ::skill)
   :ret nat-int?)
@@ -482,6 +517,10 @@
 
 (defn has-lost? [herd]
   (= max-hunger (:hunger herd)))
+
+(s/fdef has-lost?
+  :args (s/cat :herd ::herd)
+  :ret boolean?)
 
 (defn next-location [herd index]
   (let [{:keys [path]} herd]
@@ -557,32 +596,6 @@
                :location ::location
                :project ::project)
   :ret boolean?)
-
-(defn enact-project
-  [herd location {:keys [uses effect location-effect] :as project}]
-  (let [skill (as-> (partial effective-skill herd) $
-                (map $ uses)
-                (reduce + $)
-                (/ $ (count uses)))
-        stores-filter (get-in project [:filter :stores])
-        update-stores (if stores-filter
-                        #(reduce
-                          (fn [herd [resource amount]]
-                            (update-in herd [:stores resource] - amount))
-                          %
-                          stores-filter)
-                        identity)]
-    [(-> (effect herd skill)
-         update-stores)
-     (if location-effect
-       (location-effect location)
-       location)]))
-
-(s/fdef enact-project
-  :args (s/cat :herd ::herd
-               :location ::location
-               :project ::project)
-  :ret (s/tuple ::herd ::location))
 
 (defn becomes-passionate?
   [used {:keys [passions]}]
@@ -670,13 +683,6 @@
   :args (s/cat :herd ::herd
                :project ::project)
   :ret ::herd)
-
-(defn do-project
-  [herd location project]
-  (let [[herd location] (enact-project herd location project)]
-    (-> (assoc-in herd [:path 0 (:index herd)] location)
-        (distribute-experience project)
-        (distribute-fulfillment project))))
 
 (defn crop-info [crop]
   (let [nutrients (crop->nutrients crop)]
@@ -1018,6 +1024,43 @@
                     amount (int (/ skill-amount modifier))]
                 (update herd :individuals
                         (partial map #(inc-fulfillment % amount)))))}]))
+
+
+
+(defn enact-project
+  [herd location {:keys [uses effect location-effect] :as project}]
+  (let [skill (if (seq uses)
+                (as-> (partial effective-skill herd) $
+                  (map $ uses)
+                  (reduce + $)
+                  (/ $ (count uses)))
+                0)
+        stores-filter (get-in project [:filter :stores])
+        update-stores (if stores-filter
+                        #(reduce
+                          (fn [herd [resource amount]]
+                            (update-in herd [:stores resource] - amount))
+                          %
+                          stores-filter)
+                        identity)
+        location* (cond-> location
+                    location-effect (location-effect location))]
+    (-> (cond-> herd
+          effect (effect herd skill))
+        (assoc-in [:path 0 (:index herd)] location*)
+        update-stores)))
+
+(s/fdef enact-project
+  :args (s/cat :herd ::herd
+               :location ::location
+               :project ::project)
+  :ret ::herd)
+
+(defn do-project
+  [herd location project]
+  (-> (enact-project herd location project)
+      (distribute-experience project)
+      (distribute-fulfillment project)))
 
 (defn pre-location [herd]
   (inc-month herd))
