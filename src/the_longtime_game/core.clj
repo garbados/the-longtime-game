@@ -44,7 +44,10 @@
                   "virtuoso"])
 
 (def max-age 100)
-(def optimal-pops-per-stage 100)
+(def death-modifier 3/4)
+(def optimal-pops-per-stage 20)
+(def base-birth-chance 4)
+(def birth-variance 3)
 (def max-hunger 4)
 (def max-infrastructure 4)
 (def max-skill (count skill-ranks))
@@ -109,7 +112,7 @@
   :args (s/cat)
   :ret ::minot-name)
 
-(s/def ::age pos-int?)
+(s/def ::born pos-int?)
 (s/def ::passions (s/coll-of ::skill
                              :kind set?
                              :min-count 0
@@ -119,14 +122,6 @@
 (s/def ::trait traits)
 (s/def ::traits (s/coll-of ::trait :kind set?))
 (s/def ::fulfillment (s/int-in 0 max-fulfillment))
-(s/def ::individual
-  (s/keys :req-un [::name
-                   ::age
-                   ::traits
-                   ::passions
-                   ::skills
-                   ::fulfillment]))
-(s/def ::individuals (s/coll-of ::individual))
 
 (defn inc-some-skill [skills*]
   (let [skill (rand-nth (vec skills))
@@ -140,24 +135,52 @@
                :candidates (s/coll-of ::skill))
   :ret ::skills)
 
-(defn gen-individual []
-  (let [age (+ 1 (rand-int max-age))
-        base-skills (int (/ age 10))]
-    {:name (gen-name)
-     :age age
-     :fulfillment 50
-     :traits (set [(first (shuffle traits))])
-     :passions (set (take (+ 1 (rand-int 2))
-                          (shuffle (vec skills))))
-     :skills (reduce
-              (fn [skills _]
-                (inc-some-skill skills))
-              {}
-              (range base-skills))}))
+(defn gen-individual
+  ([]
+   (gen-individual (- (* 12 (+ 1 (rand-int max-age))))))
+  ([born]
+   {:name (gen-name)
+    :born born
+    :fulfillment (rand-int 100)
+    :traits (set [(first (shuffle traits))])
+    :passions (set (take (+ 1 (rand-int 2))
+                         (shuffle (vec skills))))
+    :skills (reduce
+             (fn [skills _]
+               (inc-some-skill skills))
+             {}
+             (range (rand-int 10)))})
+  ([herd born]
+   (let [age (- (:month herd) born)]
+     {:name (gen-name)
+      :born born
+      :fulfillment (rand-int 100)
+      :traits (set [(first (shuffle traits))])
+      :passions (set (take (+ 1 (rand-int 2))
+                           (shuffle (vec skills))))
+      :skills (reduce
+               (fn [skills _]
+                 (inc-some-skill skills))
+               {}
+               (range (/ age 5)))})))
+
+(s/def ::individual
+  (s/with-gen
+    (s/keys :req-un [::name
+                     ::born
+                     ::traits
+                     ::passions
+                     ::skills
+                     ::fulfillment])
+    #(g/fmap
+      (fn [_] (gen-individual))
+      (g/return 0))))
 
 (s/fdef gen-individual
   :args (s/cat)
   :ret ::individual)
+
+(s/def ::individuals (s/coll-of ::individual))
 
 (defn gen-individuals [n]
   (for [_ (range n)]
@@ -398,21 +421,34 @@
               (s/gen ::individuals)
               (s/gen ::syndicates)))))
 
+(defn get-age [{:keys [month]} {:keys [born]}]
+  (int (/ (- month born) 12)))
+
+(s/fdef get-age
+  :args (s/cat :herd ::herd
+               :individual ::individual)
+  :ret nat-int?)
+
 (defn birth-chance
   [{:keys [hunger sickness individuals path]}]
   (let [stages (count path)
-        optimal (* optimal-pops-per-stage stages)
         population (count individuals)
-        diff (/ (- optimal population) optimal-pops-per-stage)
-        chance (* diff
-                  (- 1 (/ hunger max-hunger))
-                  (- 1 (/ sickness population)))
-        births (rand-int (int (* 2 chance)))]
+        optimal (* optimal-pops-per-stage
+                   stages
+                   (- 1 (/ hunger max-hunger))
+                   (- 1 (/ sickness population)))
+        births (-> (- optimal population)
+                   (/ optimal-pops-per-stage)
+                   int
+                   (min birth-variance)
+                   (max (- birth-variance))
+                   (+ base-birth-chance)
+                   rand-int)]
     births))
 
 (defn death-chance
-  [{:keys [hunger sickness individuals]} {:keys [age]}]
-  (* (/ age max-age)
+  [{:keys [hunger sickness individuals] :as herd} individual]
+  (* (get-age herd individual)
      (+ 1 (/ hunger max-hunger))
      (+ 1 (/ sickness (count individuals)))))
 
@@ -423,9 +459,10 @@
 
 (defn died?
   [herd individual]
-  (->> (death-chance herd individual)
-       (* (rand-int max-age))
-       (> max-age)))
+  (let [chance (death-chance herd individual)
+        rolled (* chance (rand-int max-age))
+        passed? (> rolled (* death-modifier max-age))]
+    passed?))
 
 (s/fdef died?
   :args (s/cat :herd ::herd
@@ -445,12 +482,17 @@
   :args (s/cat :herd ::herd)
   :ret ::season)
 
-(defn effective-skill
+(defn individual-skill
+  [individual skill]
+  (* (get-in individual [:skills skill] 0)
+     (:fulfillment individual)))
+
+(defn collective-skill
   [{:keys [individuals syndicates hunger sickness]} skill]
-  (int (* (->> individuals
-               (map :skills)
-               (map #(get % skill 0))
-               (reduce +))
+  (int (* (reduce
+           #(+ %1 (individual-skill %2 skill))
+           0
+           individuals)
           (-> (->> syndicates
                    (reduce into [])
                    frequencies)
@@ -464,14 +506,14 @@
             (max 0 (- 1 (/ sickness (count individuals))))
             1))))
 
-(s/fdef effective-skill
+(s/fdef collective-skill
   :args (s/cat :herd ::herd
                :skill ::skill)
   :ret nat-int?)
 
 (defn collective-labor
   [herd skill]
-  (+ (effective-skill herd skill)
+  (+ (collective-skill herd skill)
      (count (:individuals herd))))
 
 (s/fdef collective-labor
@@ -583,7 +625,7 @@
          (reduce
           (fn [ok? [skill required]]
             (and ok?
-                 (>= (effective-skill herd skill)
+                 (>= (collective-skill herd skill)
                      required)))
           true
           (get-in project [:filter :skills] []))
@@ -1030,7 +1072,7 @@
 (defn enact-project
   [herd location {:keys [uses effect location-effect] :as project}]
   (let [skill (if (seq uses)
-                (as-> (partial effective-skill herd) $
+                (as-> (partial collective-skill herd) $
                   (map $ uses)
                   (reduce + $)
                   (/ $ (count uses)))

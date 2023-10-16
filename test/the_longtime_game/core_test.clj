@@ -21,7 +21,7 @@
                `core/died?
                `core/local-infra?
                `core/get-season
-               `core/effective-skill
+               `core/collective-skill
                `core/collective-labor
                `core/apply-herd-upkeep
                `core/map-locations
