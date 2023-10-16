@@ -57,6 +57,7 @@
 (def passion-rate 10)
 (def fulfillment-rate 10)
 (def fulfillment-decay 1)
+(def carry-modifier 3)
 (def organization-threshold 100)
 (def organization-multiplier 10)
 
@@ -154,7 +155,7 @@
 
 (s/fdef becomes-passionate?
   :args (s/cat :used ::uses
-               :individual ::individual)
+               :individual (s/keys :req-un [::passions]))
   :ret (s/nilable ::skill))
 
 (defn age-individual
@@ -166,7 +167,7 @@
         quintile-bday? (and birthday?
                             (= 0 (rem age 5)))
         gain-passion? (and quintile-bday?
-                           (= 1 (rand-int 2)))
+                           (> (rand-int 3) 0))
         skill (when gain-passion?
                 (becomes-passionate? skills individual))]
     (cond-> individual
@@ -174,11 +175,6 @@
       (update :skills inc-some-skill)
       skill
       (update :passions conj skill))))
-
-(s/fdef age-individual
-  :args (s/cat :herd (s/keys :req-un [::month])
-               :individual ::individual)
-  :ret ::individual)
 
 (defn gen-baby
   [born]
@@ -193,10 +189,6 @@
             {}
             skills)})
 
-(s/fdef gen-baby
-  :args (s/cat :born ::born)
-  :ret ::individual)
-
 (defn gen-individual
   [{:keys [month]} age-in-months]
   (let [born (- month age-in-months)
@@ -208,21 +200,11 @@
      individual
      (range age-in-months))))
 
-(s/fdef gen-individual
-  :args (s/cat :herd (s/keys :req-un [::month])
-               :age pos-int?)
-  :ret ::individual)
-
 (defn gen-adult
   [herd]
   (let [age (+ (* 12 adulthood)
                (rand-int (* 12 (- max-age adulthood))))]
     (gen-individual herd age)))
-
-(s/fdef gen-adult
-  :args (s/cat :herd (s/keys :req-un [::month])
-               :age pos-int?)
-  :ret ::individual)
 
 (s/def ::individual
   (s/with-gen
@@ -235,6 +217,25 @@
     #(g/fmap
       (fn [age] (gen-individual {:month 0} age))
       (g/generate (s/gen (s/int-in 0 (rand-int (* 12 max-age))))))))
+
+(s/fdef gen-baby
+  :args (s/cat :born ::born)
+  :ret ::individual)
+
+(s/fdef age-individual
+  :args (s/cat :herd (s/keys :req-un [::month])
+               :individual ::individual)
+  :ret ::individual)
+
+(s/fdef gen-individual
+  :args (s/cat :herd (s/keys :req-un [::month])
+               :age pos-int?)
+  :ret ::individual)
+
+(s/fdef gen-adult
+  :args (s/cat :herd (s/keys :req-un [::month])
+               :age pos-int?)
+  :ret ::individual)
 
 (s/fdef gen-individual
   :args (s/cat)
@@ -396,13 +397,17 @@
                                ::p
                                ::crop
                                ::wild?
-                               ::ready?])
+                               ::ready?
+                               ::stores])
       :forest (s/keys :req-un [::infra
                                ::flora
-                               ::depleted?])
+                               ::depleted?
+                               ::stores])
       :swamp (s/keys :req-un [::infra
-                              ::depleted?])
-      :basic  (s/keys :req-un [::infra])
+                              ::depleted?
+                              ::stores])
+      :basic  (s/keys :req-un [::infra
+                               ::stores])
       :shortcut (s/keys :req-un [])))
     #(g/fmap init-location
              (s/gen terrains))))
@@ -425,8 +430,8 @@
    (gen-herd {:hunger 0
               :sickness 0
               :month 0}))
-  ([{:keys [hunger sickness month]}]
-   (let [individuals (gen-individuals (rand-int 50))
+  ([{:keys [hunger sickness month] :as herd}]
+   (let [individuals (gen-individuals herd (rand-int 50))
          {:keys [syndicates]}
          (-> {:individuals individuals
               :syndicates #{}}
@@ -483,6 +488,15 @@
               (s/gen ::individuals)
               (s/gen ::syndicates)))))
 
+(defn current-location
+  [herd]
+  (get-in herd [:path 0 (:index herd)]))
+
+(s/fdef current-location
+  :args (s/cat :herd (s/keys :req-un [::path
+                                      ::index]))
+  :ret ::location)
+
 (defn birth-chance
   [{:keys [hunger sickness individuals path]}]
   (let [stages (count path)
@@ -524,7 +538,7 @@
   :ret boolean?)
 
 (defn local-infra? [herd infra]
-  (let [location (get-in herd [:path 0 (:index herd)])]
+  (let [location (current-location herd)]
     (contains? (:infra location) infra)))
 
 (s/def ::season (s/int-in 0 4))
@@ -539,7 +553,7 @@
 (defn individual-skill
   [individual skill]
   (* (get-in individual [:skills skill] 0)
-     (:fulfillment individual)))
+     (/ (:fulfillment individual) max-fulfillment)))
 
 (defn collective-skill
   [{:keys [individuals syndicates hunger sickness]} skill]
@@ -574,6 +588,53 @@
   :args (s/cat :herd ::herd
                :skill ::skill)
   :ret nat-int?)
+
+(defn carry-limit
+  [herd]
+  (* carry-modifier
+     (collective-labor herd :athletics)))
+
+(s/fdef carry-limit
+  :args (s/cat :herd ::herd)
+  :ret pos-int?)
+
+(defn keep-and-leave-behind
+  [herd carrying]
+  (let [leaving (reduce
+                 (fn [all [resource amount]]
+                   (let [stored (get-in herd [:stores resource] 0)]
+                     (assoc all resource
+                            (- stored amount))))
+                 {}
+                 carrying)]
+    (assoc-in herd [:path 0 (:index herd) :stores] leaving)))
+
+(s/fdef keep-and-leave-behind
+  :args (s/cat :herd ::herd
+               :carrying ::stores)
+  :ret ::herd
+  :fn (fn [{:keys [args]}]
+        (let [{:keys [herd carrying]} args
+              stores (:stores herd)]
+          (and
+           (every?
+            (fn [[resource amount]]
+              (>= (get stores resource) amount))
+            carrying)
+           (->> (vals carrying)
+                (reduce +)
+                (> (carry-limit herd)))))))
+
+(defn aggregate-store
+  [herd]
+  (let [location (current-location herd)]
+    (merge-with +
+                (:stores herd)
+                (:stores location))))
+
+(s/fdef aggregate-store
+  :args (s/cat :herd ::herd)
+  :ret ::stores)
 
 (defn apply-herd-upkeep
   [{:keys [individuals stores] :as herd}]
@@ -662,7 +723,7 @@
 
 (defn can-enact?
   [herd project]
-  (let [location (get-in herd [:path 0 (:index herd)])]
+  (let [location (current-location herd)]
     (and (if-let [terrain (get-in project [:filter :terrain])]
            (= (:type location) terrain)
            true)
