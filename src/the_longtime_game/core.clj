@@ -43,11 +43,11 @@
                   "expert"
                   "virtuoso"])
 
-(def max-age 100)
+(def max-age 50)
+(def adulthood 20)
 (def death-modifier 2/3)
 (def optimal-pops-per-stage 20)
-(def base-birth-chance 2)
-(def birth-variance 1)
+(def birth-modifier 2)
 (def max-hunger 4)
 (def max-infrastructure 4)
 (def max-skill (count skill-ranks))
@@ -135,33 +135,94 @@
                :candidates (s/coll-of ::skill))
   :ret ::skills)
 
+(defn get-age [{:keys [month]} {:keys [born]}]
+  (int (/ (- month born) 12)))
+
+(s/fdef get-age
+  :args (s/cat :herd (s/keys :req-un [::month])
+               :individual (s/keys :req-un [::born]))
+  :ret nat-int?)
+
+(defn becomes-passionate?
+  [used {:keys [passions]}]
+  (when (> max-passions (count passions))
+    (let [candidates (filter (partial (complement contains?) passions) used)]
+      (when (seq candidates)
+        (let [chance (rand-int (int (* passion-rate (count candidates))))]
+          (when (< chance (count candidates))
+            (nth candidates chance)))))))
+
+(s/fdef becomes-passionate?
+  :args (s/cat :used ::uses
+               :individual ::individual)
+  :ret (s/nilable ::skill))
+
+(defn age-individual
+  [herd individual]
+  (let [age (get-age herd individual)
+        birthday? (= 0 (rem (- (:month herd)
+                               (:born individual))
+                            12))
+        quintile-bday? (and birthday?
+                            (= 0 (rem age 5)))
+        gain-passion? (and quintile-bday?
+                           (= 1 (rand-int 2)))
+        skill (when gain-passion?
+                (becomes-passionate? skills individual))]
+    (cond-> individual
+      quintile-bday?
+      (update :skills inc-some-skill)
+      skill
+      (update :passions conj skill))))
+
+(s/fdef age-individual
+  :args (s/cat :herd (s/keys :req-un [::month])
+               :individual ::individual)
+  :ret ::individual)
+
+(defn gen-baby
+  [born]
+  {:name (gen-name)
+   :born born
+   :fulfillment 50
+   :traits #{}
+   :passions #{}
+   :skills (reduce
+            (fn [skills* skill]
+              (assoc skills* skill 0))
+            {}
+            skills)})
+
+(s/fdef gen-baby
+  :args (s/cat :born ::born)
+  :ret ::individual)
+
 (defn gen-individual
-  ([]
-   (gen-individual (- (* 12 (+ 1 (rand-int max-age))))))
-  ([born]
-   {:name (gen-name)
-    :born born
-    :fulfillment (rand-int 100)
-    :traits #{}
-    :passions #{}
-    :skills (reduce
-             (fn [skills _]
-               (inc-some-skill skills))
-             {}
-             (range (rand-int 10)))})
-  ([herd born]
-   (let [age (- (:month herd) born)]
-     {:name (gen-name)
-      :born born
-      :fulfillment (rand-int 100)
-      :traits (set [(first (shuffle traits))])
-      :passions (set (take (+ 1 (rand-int 2))
-                           (shuffle (vec skills))))
-      :skills (reduce
-               (fn [skills _]
-                 (inc-some-skill skills))
-               {}
-               (range (/ age 5)))})))
+  [{:keys [month]} age-in-months]
+  (let [born (- month age-in-months)
+        individual (gen-baby born)]
+    (reduce
+     (fn [individual i]
+       (let [month* (+ born i)]
+         (age-individual {:month month*} individual)))
+     individual
+     (range age-in-months))))
+
+(s/fdef gen-individual
+  :args (s/cat :herd (s/keys :req-un [::month])
+               :age pos-int?)
+  :ret ::individual)
+
+(defn gen-adult
+  [herd]
+  (let [age (+ (* 12 adulthood)
+               (rand-int (* 12 (- max-age adulthood))))]
+    (gen-individual herd age)))
+
+(s/fdef gen-adult
+  :args (s/cat :herd (s/keys :req-un [::month])
+               :age pos-int?)
+  :ret ::individual)
 
 (s/def ::individual
   (s/with-gen
@@ -172,8 +233,8 @@
                      ::skills
                      ::fulfillment])
     #(g/fmap
-      (fn [_] (gen-individual))
-      (g/return 0))))
+      (fn [age] (gen-individual {:month 0} age))
+      (g/generate (s/gen (s/int-in 0 (rand-int (* 12 max-age))))))))
 
 (s/fdef gen-individual
   :args (s/cat)
@@ -181,12 +242,14 @@
 
 (s/def ::individuals (s/coll-of ::individual :min-count 1))
 
-(defn gen-individuals [n]
-  (for [_ (range n)]
-    (gen-individual)))
+(defn gen-individuals [herd n]
+  (for [_ (range n)
+        :let [age (rand-int (* 12 max-age))]]
+    (gen-individual herd age)))
 
 (s/fdef gen-individuals
-  :args (s/cat :n (s/int-in 1 500))
+  :args (s/cat :herd (s/keys :req-un [::month])
+               :n (s/int-in 1 500))
   :ret ::individuals)
 
 (s/def ::ethos (s/coll-of ::skill :kind set? :count 2))
@@ -420,14 +483,6 @@
               (s/gen ::individuals)
               (s/gen ::syndicates)))))
 
-(defn get-age [{:keys [month]} {:keys [born]}]
-  (int (/ (- month born) 12)))
-
-(s/fdef get-age
-  :args (s/cat :herd ::herd
-               :individual ::individual)
-  :ret nat-int?)
-
 (defn birth-chance
   [{:keys [hunger sickness individuals path]}]
   (let [stages (count path)
@@ -439,7 +494,7 @@
         births (-> (- optimal population)
                    (/ optimal)
                    (+ 1)
-                   (* base-birth-chance)
+                   (* birth-modifier)
                    int
                    rand-int)]
     births))
@@ -637,38 +692,6 @@
                :location ::location
                :project ::project)
   :ret boolean?)
-
-(defn becomes-passionate?
-  [used {:keys [passions]}]
-  (when (> max-passions (count passions))
-    (let [candidates (filter (partial (complement contains?) passions) used)]
-      (when (seq candidates)
-        (let [chance (rand-int (int (* passion-rate (count candidates))))]
-          (when (< chance (count candidates))
-            (nth candidates chance)))))))
-
-(s/fdef becomes-passionate?
-  :args (s/cat :used ::uses
-               :individual ::individual)
-  :ret (s/nilable ::skill))
-
-(defn age-individual
-  [herd individual]
-  (let [age (get-age herd individual)
-        birthday? (rem (- (:month herd)
-                          (:born individual))
-                       12)
-        quintile-bday? (and birthday?
-                            (= 0 (rem age 5)))
-        gain-passion? (and quintile-bday?
-                           (= 1 (rand-int 2)))
-        skill (when gain-passion?
-                (becomes-passionate? skills individual))]
-    (cond-> individual
-      quintile-bday?
-      (update :skills inc-some-skill)
-      skill
-      (update :passions conj skill))))
 
 (defn gains-experience?
   [used syndicates {:keys [passions skills]}]
