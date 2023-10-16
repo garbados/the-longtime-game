@@ -44,10 +44,10 @@
                   "virtuoso"])
 
 (def max-age 100)
-(def death-modifier 3/4)
+(def death-modifier 2/3)
 (def optimal-pops-per-stage 20)
-(def base-birth-chance 4)
-(def birth-variance 3)
+(def base-birth-chance 2)
+(def birth-variance 1)
 (def max-hunger 4)
 (def max-infrastructure 4)
 (def max-skill (count skill-ranks))
@@ -142,9 +142,8 @@
    {:name (gen-name)
     :born born
     :fulfillment (rand-int 100)
-    :traits (set [(first (shuffle traits))])
-    :passions (set (take (+ 1 (rand-int 2))
-                         (shuffle (vec skills))))
+    :traits #{}
+    :passions #{}
     :skills (reduce
              (fn [skills _]
                (inc-some-skill skills))
@@ -180,7 +179,7 @@
   :args (s/cat)
   :ret ::individual)
 
-(s/def ::individuals (s/coll-of ::individual))
+(s/def ::individuals (s/coll-of ::individual :min-count 1))
 
 (defn gen-individuals [n]
   (for [_ (range n)]
@@ -438,17 +437,16 @@
                    (- 1 (/ hunger max-hunger))
                    (- 1 (/ sickness population)))
         births (-> (- optimal population)
-                   (/ optimal-pops-per-stage)
+                   (/ optimal)
+                   (+ 1)
+                   (* base-birth-chance)
                    int
-                   (min birth-variance)
-                   (max (- birth-variance))
-                   (+ base-birth-chance)
                    rand-int)]
     births))
 
 (defn death-chance
   [{:keys [hunger sickness individuals] :as herd} individual]
-  (* (get-age herd individual)
+  (* (/ (get-age herd individual) max-age)
      (+ 1 (/ hunger max-hunger))
      (+ 1 (/ sickness (count individuals)))))
 
@@ -461,7 +459,8 @@
   [herd individual]
   (let [chance (death-chance herd individual)
         rolled (* chance (rand-int max-age))
-        passed? (> rolled (* death-modifier max-age))]
+        threshold (* death-modifier max-age)
+        passed? (> rolled threshold)]
     passed?))
 
 (s/fdef died?
@@ -642,7 +641,7 @@
 (defn becomes-passionate?
   [used {:keys [passions]}]
   (when (> max-passions (count passions))
-    (let [candidates (filter (partial contains? passions) used)]
+    (let [candidates (filter (partial (complement contains?) passions) used)]
       (when (seq candidates)
         (let [chance (rand-int (int (* passion-rate (count candidates))))]
           (when (< chance (count candidates))
@@ -652,6 +651,24 @@
   :args (s/cat :used ::uses
                :individual ::individual)
   :ret (s/nilable ::skill))
+
+(defn age-individual
+  [herd individual]
+  (let [age (get-age herd individual)
+        birthday? (rem (- (:month herd)
+                          (:born individual))
+                       12)
+        quintile-bday? (and birthday?
+                            (= 0 (rem age 5)))
+        gain-passion? (and quintile-bday?
+                           (= 1 (rand-int 2)))
+        skill (when gain-passion?
+                (becomes-passionate? skills individual))]
+    (cond-> individual
+      quintile-bday?
+      (update :skills inc-some-skill)
+      skill
+      (update :passions conj skill))))
 
 (defn gains-experience?
   [used syndicates {:keys [passions skills]}]
