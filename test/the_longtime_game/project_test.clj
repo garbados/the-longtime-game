@@ -36,7 +36,8 @@
 (defspec test-can-enact? 20
   (props/for-all
    [herd (s/gen ::core/herd)
-    project (g/elements project/projects)]
+    project (s/gen ::project/project)]
+   (println herd project)
    (is (s/valid? boolean? (project/can-enact? herd project)))))
 
 (defspec test-enact-project 20
