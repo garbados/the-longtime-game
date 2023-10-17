@@ -1,5 +1,5 @@
 (defproject the-longtime-game "0.1.0-SNAPSHOT"
-  :description "The Longtime: of Seasons and Minotaurs"
+  :description "The Longtime"
   :url "https//github.com/garbados/the-longtime-game"
   :license {:name "CC BY-NC-SA"
             :url "https://creativecommons.org/licenses/by-nc-sa/4.0/deed.en"}

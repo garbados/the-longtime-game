@@ -115,16 +115,16 @@
                              :min-count 0
                              :max-count max-passions))
 (s/def ::skill skills)
-(s/def ::skills (s/map-of ::skill nat-int?))
+(s/def ::skills (s/map-of ::skill (s/int-in 0 (inc max-skill))))
 (s/def ::uses (s/coll-of ::skill))
 (s/def ::trait traits)
 (s/def ::traits (s/coll-of ::trait :kind set?))
-(s/def ::fulfillment (s/int-in 0 max-fulfillment))
+(s/def ::fulfillment (s/int-in 0 (+ 1 max-fulfillment)))
 
 (defn inc-some-skill [skills*]
   (let [skill (rand-nth (vec skills))
         rank (get skills* skill 0)]
-    (if (= rank 5)
+    (if (= rank max-skill)
       (inc-some-skill skills*)
       (assoc skills* skill (inc rank)))))
 
@@ -232,7 +232,9 @@
   :args (s/cat :herd (s/keys :req-un [::month]))
   :ret ::individual)
 
-(s/def ::individuals (s/coll-of ::individual :min-count 1))
+(s/def ::individuals (s/coll-of ::individual
+                                :min-count 1
+                                :max-count 1000))
 
 (defn gen-individuals [herd n]
   (for [_ (range n)
@@ -249,7 +251,7 @@
 (s/def ::syndicates (s/coll-of ::syndicate :kind set?))
 
 (defn syndicate-name [ethos]
-  (as-> (vec (map skill->shortname ethos)) $
+  (as-> (map skill->shortname ethos) $
     (vec $)
     (conj $ "syn")
     (string/join "-" $)))
@@ -675,7 +677,7 @@
   (= max-hunger (:hunger herd)))
 
 (s/fdef has-lost?
-  :args (s/cat :herd ::herd)
+  :args (s/cat :herd (s/keys :req-un [::hunger]))
   :ret boolean?)
 
 (defn next-location
@@ -686,9 +688,11 @@
                           (first path)))))
 
 (s/fdef next-location
-  :args (s/cat :herd ::herd
+  :args (s/cat :herd (s/keys :req-un [::path
+                                      ::index])
                :index ::index)
-  :ret ::herd)
+  :ret (s/keys :req-un [::path
+                        ::index]))
 
 (defn crop-info [crop]
   (let [nutrients (crop->nutrients crop)]
@@ -696,6 +700,11 @@
      (if (= 2 (count nutrients))
        2
        3)]))
+
+(s/fdef crop-info
+  :args (s/cat :crop crops)
+  :ret (s/tuple (s/coll-of nutrients)
+                (s/int-in 2 4)))
 
 (defn update-nutrients
   [nutrients amount location]
@@ -805,6 +814,57 @@
         ;; winter
         3 (map-locations enter-winter herd))
       herd*)))
+
+(s/def ::uses (s/coll-of ::skill))
+
+(defn gains-experience?
+  [used syndicates {:keys [passions skills]}]
+  (let [used* (filter #(> max-skill (get skills %)) used)
+        chance (* experience-rate (count used*))
+        syndicate-counts (frequencies (reduce into syndicates []))
+        syndicate-bonus #(get syndicate-counts % 0)
+        passion-bonus #(if (contains? passions %) 1 0)]
+    (when (pos? chance)
+      (first
+       (filter
+        (fn [skill]
+          (let [threshold (reduce + 1 ((juxt syndicate-bonus passion-bonus) skill))
+                roll (rand-int chance)]
+            (>= threshold roll)))
+        used*)))))
+
+(s/fdef gains-experience?
+  :args (s/cat :used ::uses
+               :syndicates ::syndicates
+               :individual ::individual)
+  :ret (s/nilable ::skill))
+
+(defn inc-fulfillment [individual amount]
+  (-> individual
+      (update :fulfillment + amount)
+      (update :fulfillment min max-fulfillment)
+      (update :fulfillment max 0)))
+
+(s/fdef inc-fulfillment
+  :args (s/cat :individual ::individual
+               :amount (s/int-in -100 100))
+  :ret ::individual)
+
+(defn update-individual-fulfillment
+  [uses {:keys [passions] :as individual}]
+  (if (seq uses)
+    (let [amount (int (/ fulfillment-rate (count uses)))
+          overlap (-> (partial contains? passions)
+                      (map uses)
+                      frequencies
+                      (get true 0))]
+      (inc-fulfillment individual (* amount overlap)))
+    individual))
+
+(s/fdef update-individual-fulfillment
+  :args (s/cat :uses ::uses
+               :individual ::individual)
+  :ret ::individual)
 
 (defn pre-location [herd]
   (inc-month herd))

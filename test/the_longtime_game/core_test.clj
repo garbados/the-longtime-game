@@ -43,5 +43,8 @@
     `core/enter-fall
     `core/enter-winter
     `core/inc-month
+    `core/gains-experience?
+    `core/inc-fulfillment
+    `core/update-individual-fulfillment
     `core/pre-month
     `core/post-month]))
