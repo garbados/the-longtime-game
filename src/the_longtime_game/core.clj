@@ -29,13 +29,6 @@
 
 (def traits #{:todo}) ; TODO
 
-(def crops #{:grapplewheat
-             :rattails
-             :drum-squash
-             :singe-pepper
-             :lorry-tops
-             :craunions})
-
 (def skill-ranks ["unfamiliar"
                   "novice"
                   "learned"
@@ -57,7 +50,7 @@
 (def passion-rate 10)
 (def fulfillment-rate 10)
 (def fulfillment-decay 1)
-(def carry-modifier 3)
+(def carry-modifier 5)
 (def organization-threshold 100)
 (def organization-multiplier 10)
 
@@ -65,9 +58,12 @@
   {:grapplewheat #{:n :k}
    :rattails     #{:n :p}
    :drum-squash  #{:p :k}
-   :singe-pepper #{:n}
+   :bean-peppers #{:n}
    :lorry-tops   #{:p}
-   :craunions    #{:k}})
+   :crownions    #{:k}})
+
+(def crops (set (keys crop->nutrients)))
+(def nutrients #{:n :k :p})
 
 (def skill->shortname
   {:athletics  "ath"
@@ -113,13 +109,14 @@
   :args (s/cat)
   :ret ::minot-name)
 
-(s/def ::born pos-int?)
+(s/def ::born int?)
 (s/def ::passions (s/coll-of ::skill
                              :kind set?
                              :min-count 0
                              :max-count max-passions))
 (s/def ::skill skills)
 (s/def ::skills (s/map-of ::skill nat-int?))
+(s/def ::uses (s/coll-of ::skill))
 (s/def ::trait traits)
 (s/def ::traits (s/coll-of ::trait :kind set?))
 (s/def ::fulfillment (s/int-in 0 max-fulfillment))
@@ -132,8 +129,7 @@
       (assoc skills* skill (inc rank)))))
 
 (s/fdef inc-some-skill
-  :args (s/cat :skills ::skills
-               :candidates (s/coll-of ::skill))
+  :args (s/cat :skills ::skills)
   :ret ::skills)
 
 (defn get-age [{:keys [month]} {:keys [born]}]
@@ -216,7 +212,7 @@
                      ::fulfillment])
     #(g/fmap
       (fn [age] (gen-individual {:month 0} age))
-      (g/generate (s/gen (s/int-in 0 (rand-int (* 12 max-age))))))))
+      (s/gen (s/int-in 0 (rand-int (* 12 max-age)))))))
 
 (s/fdef gen-baby
   :args (s/cat :born ::born)
@@ -229,16 +225,11 @@
 
 (s/fdef gen-individual
   :args (s/cat :herd (s/keys :req-un [::month])
-               :age pos-int?)
+               :age (s/int-in 1 (* 12 max-age)))
   :ret ::individual)
 
 (s/fdef gen-adult
-  :args (s/cat :herd (s/keys :req-un [::month])
-               :age pos-int?)
-  :ret ::individual)
-
-(s/fdef gen-individual
-  :args (s/cat)
+  :args (s/cat :herd (s/keys :req-un [::month]))
   :ret ::individual)
 
 (s/def ::individuals (s/coll-of ::individual :min-count 1))
@@ -250,7 +241,7 @@
 
 (s/fdef gen-individuals
   :args (s/cat :herd (s/keys :req-un [::month])
-               :n (s/int-in 1 500))
+               :n (s/int-in 1 50))
   :ret ::individuals)
 
 (s/def ::ethos (s/coll-of ::skill :kind set? :count 2))
@@ -417,7 +408,7 @@
   :ret ::location)
 
 (s/def ::resource resources)
-(s/def ::stores (s/map-of ::resource pos-int?))
+(s/def ::stores (s/map-of ::resource nat-int?))
 (s/def ::locations (s/coll-of ::location :min-count 1))
 (s/def ::path (s/coll-of ::locations :kind vector? :min-count 1))
 (s/def ::hunger (s/int-in 0 (+ 1 max-hunger)))
@@ -446,7 +437,7 @@
     :syndicates syndicates
     :stores (reduce
              (fn [all resource]
-               (assoc all resource 50))
+               (assoc all resource 0))
              {}
              resources)
     :hunger hunger
@@ -493,8 +484,7 @@
   (get-in herd [:path 0 (:index herd)]))
 
 (s/fdef current-location
-  :args (s/cat :herd (s/keys :req-un [::path
-                                      ::index]))
+  :args (s/cat :herd ::herd)
   :ret ::location)
 
 (defn birth-chance
@@ -555,6 +545,11 @@
   (* (get-in individual [:skills skill] 0)
      (/ (:fulfillment individual) max-fulfillment)))
 
+(s/fdef individual-skill
+  :args (s/cat :individual ::individual
+               :skill skills)
+  :ret number?)
+
 (defn collective-skill
   [{:keys [individuals syndicates hunger sickness]} skill]
   (int (* (reduce
@@ -591,8 +586,8 @@
 
 (defn carry-limit
   [herd]
-  (* carry-modifier
-     (collective-labor herd :athletics)))
+  (* (collective-labor herd :athletics)
+     carry-modifier))
 
 (s/fdef carry-limit
   :args (s/cat :herd ::herd)
@@ -600,30 +595,34 @@
 
 (defn keep-and-leave-behind
   [herd carrying]
-  (let [leaving (reduce
-                 (fn [all [resource amount]]
-                   (let [stored (get-in herd [:stores resource] 0)]
-                     (assoc all resource
-                            (- stored amount))))
-                 {}
-                 carrying)]
-    (assoc-in herd [:path 0 (:index herd) :stores] leaving)))
+  (let [carrying
+        (cond-> carrying
+          (not (local-infra? herd :granary))
+          (assoc :food 0))
+        leaving
+        (reduce
+         (fn [all [resource amount]]
+           (let [stored (get-in herd [:stores resource] 0)]
+             (assoc all resource
+                    (- stored amount))))
+         {}
+         carrying)]
+    (-> (assoc herd :stores carrying)
+        (assoc-in [:path 0 (:index herd) :stores] leaving))))
 
 (s/fdef keep-and-leave-behind
-  :args (s/cat :herd ::herd
-               :carrying ::stores)
-  :ret ::herd
-  :fn (fn [{:keys [args]}]
-        (let [{:keys [herd carrying]} args
-              stores (:stores herd)]
-          (and
-           (every?
-            (fn [[resource amount]]
-              (>= (get stores resource) amount))
-            carrying)
-           (->> (vals carrying)
-                (reduce +)
-                (> (carry-limit herd)))))))
+  :args (s/with-gen
+          (s/cat :herd ::herd
+                 :carrying ::stores)
+          #(g/fmap (fn [herd]
+                     [herd
+                      (reduce
+                       (fn [all [resource amount]]
+                         (assoc all resource (rand-int amount)))
+                       {}
+                       (:stores herd))])
+                   (s/gen ::herd)))
+  :ret ::herd)
 
 (defn aggregate-store
   [herd]
@@ -679,152 +678,16 @@
   :args (s/cat :herd ::herd)
   :ret boolean?)
 
-(defn next-location [herd index]
-  (let [{:keys [path]} herd]
-    (assoc herd
-           :index index
-           :path (vec (conj (rest path)
-                            (first path))))))
+(defn next-location
+  [{:keys [path] :as herd} index]
+  (assoc herd
+         :index index
+         :path (vec (conj (rest path)
+                          (first path)))))
 
 (s/fdef next-location
   :args (s/cat :herd ::herd
                :index ::index)
-  :ret ::herd)
-
-(s/def ::uses (s/coll-of ::skill))
-(s/def ::terrain (s/nilable terrains))
-(s/def ::filter
-  (s/keys :opt-un [::season
-                   ::terrain
-                   ::skills
-                   ::stores]))
-(s/def ::effect
-  (s/or :fn ifn?
-        :fn* (s/fspec :args (s/cat :herd ::herd
-                                   :skill nat-int?)
-                      :ret ::herd)))
-(s/def ::filter-fn
-  (s/or :fn ifn?
-        :fn* (s/fspec
-              :args (s/cat :herd ::herd
-                           :location ::location)
-              :ret boolean?)))
-(s/def ::location-effect
-  (s/or :fn ifn?
-        :fn* (s/fspec
-              :args (s/cat :location ::location)
-              :ret ::location)))
-(s/def ::project (s/keys :req-un [::name
-                                  ::uses]
-                         :opt-un [::filter
-                                  ::filter-fn
-                                  ::effect
-                                  ::location-effect]))
-
-(defn can-enact?
-  [herd project]
-  (let [location (current-location herd)]
-    (and (if-let [terrain (get-in project [:filter :terrain])]
-           (= (:type location) terrain)
-           true)
-         (if-let [season (get-in project [:filter :season])]
-           (= (get-season herd) season)
-           true)
-         (reduce
-          (fn [ok? [resource required]]
-            (let [amount (get-in herd [:stores resource])]
-              (and ok?
-                   (>= amount required))))
-          true
-          (get-in project [:filter :stores] []))
-         (reduce
-          (fn [ok? [skill required]]
-            (and ok?
-                 (>= (collective-skill herd skill)
-                     required)))
-          true
-          (get-in project [:filter :skills] []))
-         (if-let [filter-fn (:filter-fn project)]
-           (filter-fn herd location)
-           true))))
-
-(s/fdef can-enact?
-  :args (s/cat :herd ::herd
-               :location ::location
-               :project ::project)
-  :ret boolean?)
-
-(defn gains-experience?
-  [used syndicates {:keys [passions skills]}]
-  (let [used* (filter #(> max-skill (get skills %)) used)
-        chance (* experience-rate (count used*))
-        syndicate-counts (frequencies (reduce into syndicates []))
-        syndicate-bonus #(get syndicate-counts % 0)
-        passion-bonus #(if (contains? passions %) 1 0)]
-    (first
-     (filter
-      (fn [skill]
-        (let [threshold (reduce + 1 ((juxt syndicate-bonus passion-bonus) skill))
-              roll (rand-int chance)]
-          (>= threshold roll)))
-      used*))))
-
-(s/fdef gains-experience?
-  :args (s/cat :used ::uses
-               :syndicates ::syndicates
-               :individual ::individual)
-  :ret (s/nilable ::skill))
-
-(defn distribute-experience
-  [{:keys [syndicates] :as herd} {:keys [uses]}]
-  (let [update-passions
-        (fn [individual]
-          (if-let [skill (becomes-passionate? uses individual)]
-            (update individual :passions conj skill)
-            individual))
-        update-proficiency
-        (fn [individual]
-          (if-let [skill (gains-experience? uses syndicates individual)]
-            (update-in individual [:skills skill] inc)
-            individual))
-        update-individual
-        (comp update-proficiency update-passions)]
-    (update herd :individuals (partial map update-individual))))
-
-(s/fdef distribute-experience
-  :args (s/cat :herd ::herd
-               :project ::project)
-  :ret ::herd)
-
-(defn inc-fulfillment [individual amount]
-  (-> individual
-      (update :fulfillment + amount)
-      (update :fulfillment min max-fulfillment)))
-
-(defn update-individual-fulfillment
-  [uses {:keys [passions] :as individual}]
-  (let [amount (int (/ fulfillment-rate (count uses)))
-        overlap (-> (partial contains? passions)
-                    (map uses)
-                    frequencies
-                    (get true))]
-    (inc-fulfillment individual (* amount overlap))))
-
-(s/fdef update-individual-fulfillment
-  :args (s/cat :uses ::uses
-               :individual ::individual)
-  :ret ::individual)
-
-(defn distribute-fulfillment
-  [herd {:keys [uses]}]
-  (update herd :individuals
-          (->> uses
-               (partial update-individual-fulfillment)
-               (partial map))))
-
-(s/fdef distribute-fulfillment
-  :args (s/cat :herd ::herd
-               :project ::project)
   :ret ::herd)
 
 (defn crop-info [crop]
@@ -838,16 +701,20 @@
   [nutrients amount location]
   (reduce
    (fn [location nutrient]
-     (println nutrient)
      (-> location
          (update nutrient - amount)
-         (update nutrient max 0)))
+         (update nutrient max 0)
+         (update nutrient min 3)))
    location
    nutrients))
 
 (s/fdef update-nutrients
-  :args (s/cat :crop crops
-               :location ::location))
+  :args (s/cat :nutrients (s/coll-of nutrients :kind set?)
+               :amount int?
+               :location (s/with-gen
+                           ::location
+                           #(g/return (init-location :plains))))
+  :ret ::location)
 
 (defn enter-spring
   [location]
@@ -861,10 +728,18 @@
     :else
     location))
 
+(s/fdef enter-spring
+  :args (s/cat :location ::location)
+  :ret ::location)
+
 (defn enter-summer
   [location]
   (if (= :plains (:type location))
     (cond
+      ;; plains is fallow
+      ;; restore one of each nutrient
+      (nil? (:crop location))
+      (update-nutrients nutrients -1 location)
       ;; crop is ready for harvest
       (and (some? (:crop location))
            (false? (:ready? location))
@@ -886,9 +761,17 @@
       location)
     location))
 
+(s/fdef enter-summer
+  :args (s/cat :location ::location)
+  :ret ::location)
+
 (defn enter-fall
   [location]
   location)
+
+(s/fdef enter-fall
+  :args (s/cat :location ::location)
+  :ret ::location)
 
 (defn enter-winter
   [location]
@@ -902,6 +785,10 @@
              :ready? false)
       location)
     location))
+
+(s/fdef enter-winter
+  :args (s/cat :location ::location)
+  :ret ::location)
 
 (defn inc-month [herd]
   (let [old-season (get-season herd)
@@ -918,292 +805,6 @@
         ;; winter
         3 (map-locations enter-winter herd))
       herd*)))
-
-(def projects
-  (concat (map
-           (fn [crop]
-             (let [[nutrients amount] (crop-info crop)]
-               {:name (str "Plant " (name crop))
-                :uses [:herbalism]
-                :filter (cond-> {:terrain :plains
-                                 :season 1}
-                          (= 3 amount)
-                          (merge {:skills {:herbalism 100}}))
-                :filter-fn
-                (fn [_ location]
-                  (every? true? (map #(>= (get location %) amount) nutrients)))
-                :location-effect
-                (fn [location]
-                  (-> (update-nutrients nutrients amount location)
-                      (assoc :crop crop
-                             :wild? false
-                             :ready? false)))}))
-           crops)
-          (map (fn [[infra skill required-skill stores terrain]]
-                 (let [uses (if (and skill (not= skill :craftwork))
-                              [:craftwork skill]
-                              [:craftwork])]
-                   {:name (str "Construct " (name infra))
-                    :uses uses
-                    :filter
-                    (cond-> {:stores stores
-                             :skills (if required-skill
-                                       (reduce
-                                        (fn [all skill]
-                                          (assoc all skill required-skill))
-                                        {}
-                                        uses)
-                                       {})}
-                      terrain (assoc :terrain terrain))
-                    :filter-fn
-                    (fn [_ location]
-                      (> max-infrastructure (count (:infra location))))
-                    :location-effect
-                    (fn [location]
-                      (update location :infra conj infra))}))
-               [[:granary
-                 :herbalism
-                 100
-                 {:wood 10 :stone 10 :tools 10}]
-                [:stadium
-                 :athletics
-                 100
-                 {:wood 20 :tools 5}]
-                [:observatory
-                 :organizing
-                 100
-                 {:wood 10 :stone 10 :tools 10}]
-                [:quarry
-                 :geology
-                 100
-                 {:wood 10 :stone 50 :tools 20}]
-                [:kitchen
-                 :medicine
-                 100
-                 {:wood 10 :stone 10 :tools 10}]
-                [:workshop
-                 :craftwork
-                 100
-                 {:wood 10 :stone 10 :tools 10}]
-                [:wind-forge
-                 :craftwork
-                 500
-                 {:wood 100 :stone 100 :tools 100}
-                 :jungle]
-                [:temple
-                 :organizing
-                 500
-                 {:wood 100 :stone 100 :tools 100}]
-                [:hospital
-                 :medicine
-                 100
-                 {:wood 10 :stone 10 :tools 10}]])
-          (map
-           (fn [[i material]]
-             {:name (str "Manufacture " (name material) " tools")
-              :uses [:craftwork]
-              :filter (assoc {} material 50)
-              :effect
-              (fn [herd skill-amount]
-                (let [workshop? (local-infra? herd :workshop)
-                      amount (-> (if workshop?
-                                   skill-amount
-                                   (/ skill-amount 2))
-                                 (* i)
-                                 int)]
-                  (update-in herd [:stores :tools] + amount)))})
-           [[1 :stone]
-            [2 :bone]
-            [4 :metal]])
-          [{:name "Explore"
-            :uses []
-            :effect
-            (fn [herd _]
-              (let [location (-> terrains vec rand-nth init-location)]
-                (update-in herd [:path 1] concat [location])))}
-           {:name "Elongate path"
-            :uses []
-            :filter {:skills {:organizing 500}}
-            :effect
-            (fn [herd _]
-              (let [options (vec terrains)
-                    locations [(-> options rand-nth init-location)
-                               (-> options rand-nth init-location)]]
-                (update herd :path
-                        (fn [path]
-                          (concat (subvec path 0 2)
-                                  locations
-                                  (subvec path 2))))))}
-           {:name "Harvest crops"
-            :uses [:herbalism]
-            :filter {:terrain :plains}
-            :filter-fn
-            (fn [_ location]
-              (true? (:ready? location)))
-            :effect
-            (fn [herd skill-amount]
-              (update-in herd [:stores :food] + skill-amount))
-            :location-effect
-            #(assoc %
-                    :crop nil
-                    :ready? false)}
-           (let [need 50]
-             {:name "Hold festival"
-              :uses [:athletics :organizing]
-              :filter-fn
-              (fn [herd _]
-                (> (+ (get-in herd [:stores :food] 0)
-                      (get-in herd [:stores :rations] 0))
-                   need))
-              :effect
-              (fn [herd skill-amount]
-                (let [stadium? (local-infra? herd :stadium)
-                      modifier (if stadium? 25 50)
-                      amount (int (/ skill-amount modifier))
-                      remaining-food (- (get-in herd [:stores :food] 0) need)
-                      remaining-rations
-                      (if (< remaining-food 0)
-                        (+ (get-in herd [:stores :rations] 0)
-                           remaining-food)
-                        (get-in herd [:stores :rations]))]
-                  (-> herd
-                      (update :individuals
-                              (partial map #(inc-fulfillment % amount)))
-                      (assoc-in [:stores :food] (max 0 remaining-food))
-                      (assoc-in [:stores :rations] (max 0 remaining-rations)))))})
-           {:name "Gather deadfall"
-            :uses [:herbalism]
-            :filter {:terrain :forest}
-            :filter-fn
-            (fn [_ location]
-              (false? (:depleted? location)))
-            :location-effect
-            (fn [location]
-              (assoc location :depleted? true))
-            :effect
-            (fn [herd skill-amount]
-              (let [flora (get-in herd [:path 0 (:index herd) :flora])
-                    wood (int (* flora skill-amount 1/2))
-                    bone (int (* flora skill-amount 1/4))]
-                (-> herd
-                    (update-in [:stores :wood] + wood)
-                    (update-in [:stores :bone] + bone))))}
-           {:name "Eat the land"
-            :uses [:herbalism]
-            :filter {:terrain :forest}
-            :filter-fn
-            (fn [_ location]
-              (and (> (:flora location) 0)
-                   (false? (:depleted? location))))
-            :location-effect
-            (fn [location]
-              (-> location
-                  (assoc :depleted? true)
-                  (update :flora dec)))
-            :effect
-            (fn [herd skill-amount]
-              (let [flora (get-in herd [:path 0 (:index herd) :flora])
-                    amount (* flora skill-amount 1/2)]
-                (update-in herd [:stores :food] + amount)))}
-           {:name "Venerate the land"
-            :uses [:herbalism]
-            :filter {:terrain :forest
-                     :skills {:herbalism 100}}
-            :location-effect
-            (fn [location]
-              (update location :flora inc))}
-           {:name "Smelt metal"
-            :uses [:craftwork]
-            :filter {:stores {:ore 100}
-                     :season 2}
-            :filter-fn
-            (fn [herd _]
-              (local-infra? herd :wind-forge))
-            :effect
-            (fn [herd skill-amount]
-              (update-in herd [:stores :metal] + skill-amount))}
-           {:name "Produce poultices"
-            :uses [:medicine]
-            :filter {:stores {:food 50}}
-            :effect
-            (fn [herd skill-amount]
-              (update-in herd [:stores :poultices] + skill-amount))}
-           {:name "Produce rations"
-            :uses [:medicine]
-            :filter {:stores {:food 50}}
-            :effect
-            (fn [herd skill-amount]
-              (update-in herd [:stores :rations] + skill-amount))}
-           {:name "Gather stones"
-            :uses [:geology]
-            :effect
-            (fn [herd skill-amount]
-              (-> herd
-                  (update-in [:stores :stone] + (* skill-amount 3/4))
-                  (update-in [:stores :ore] + (* skill-amount 1/4))))}
-           {:name "Gather bog-iron"
-            :uses [:geology]
-            :filter {:terrain :swamp}
-            :effect
-            (fn [herd skill-amount]
-              (update-in herd [:stores :ore] + skill-amount))
-            :location-effect
-            (fn [location]
-              (assoc location :depleted? true))}
-           {:name "Spelunk"
-            :uses [:geology :athletics]
-            :filter {:terrain :mountain
-                     :stores {:tools 10}}
-            :effect
-            (fn [herd skill-amount]
-              (update-in herd [:stores :ore] + skill-amount))}
-           {:name "Stargaze"
-            :uses [:organizing]
-            :filter {:terrain :mountain}
-            :effect
-            (fn [herd skill-amount]
-              (let [observatory? (local-infra? herd :observatory)
-                    modifier (if observatory? 25 50)
-                    amount (int (/ skill-amount modifier))]
-                (update herd :individuals
-                        (partial map #(inc-fulfillment % amount)))))}]))
-
-
-
-(defn enact-project
-  [herd location {:keys [uses effect location-effect] :as project}]
-  (let [skill (if (seq uses)
-                (as-> (partial collective-skill herd) $
-                  (map $ uses)
-                  (reduce + $)
-                  (/ $ (count uses)))
-                0)
-        stores-filter (get-in project [:filter :stores])
-        update-stores (if stores-filter
-                        #(reduce
-                          (fn [herd [resource amount]]
-                            (update-in herd [:stores resource] - amount))
-                          %
-                          stores-filter)
-                        identity)
-        location* (cond-> location
-                    location-effect (location-effect location))]
-    (-> (cond-> herd
-          effect (effect herd skill))
-        (assoc-in [:path 0 (:index herd)] location*)
-        update-stores)))
-
-(s/fdef enact-project
-  :args (s/cat :herd ::herd
-               :location ::location
-               :project ::project)
-  :ret ::herd)
-
-(defn do-project
-  [herd location project]
-  (-> (enact-project herd location project)
-      (distribute-experience project)
-      (distribute-fulfillment project)))
 
 (defn pre-location [herd]
   (inc-month herd))
