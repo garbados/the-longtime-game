@@ -253,7 +253,6 @@
          (update herd :individuals
                  (partial map #(core/inc-fulfillment % amount)))))}]))
 
-
 (s/def ::skills (s/map-of ::core/skill pos-int?))
 (s/def ::terrain (s/nilable core/terrains))
 (s/def ::filter
@@ -270,9 +269,10 @@
          :ret boolean?)))
 (s/def ::effect
   (s/or :fn ifn?
-        :fn* (s/fspec :args (s/cat :herd ::core/herd
-                                   :skill nat-int?)
-                      :ret ::core/herd)))
+        :fn* (s/fspec
+              :args (s/cat :herd ::core/herd
+                           :skill nat-int?)
+              :ret ::core/herd)))
 (s/def ::location-effect
   (s/or :fn ifn?
         :fn* (s/fspec
@@ -319,9 +319,9 @@
        (update herd :individuals)))
 
 (s/fdef distribute-fulfillment
-  :args (s/cat :herd ::core/herd
-               :project ::project)
-  :ret ::core/herd)
+  :args (s/cat :herd (s/keys :req-un [::core/individuals])
+               :project (s/keys :req-un [::core/uses]))
+  :ret (s/keys :req-un [::core/individuals]))
 
 (defn can-enact?
   [herd project]

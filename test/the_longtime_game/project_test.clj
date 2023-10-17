@@ -19,26 +19,10 @@
   (util/spec-test-syms
    [`project/gains-experience?
     `project/inc-fulfillment
-    `project/update-individual-fulfillment]))
-
-(defspec test-distribute-experience 20
-  (props/for-all
-   [herd (s/gen ::core/herd)
-    project (s/gen ::project/project)]
-   (is (s/valid? ::core/herd (project/distribute-experience herd project)))))
-
-(defspec test-distribute-fulfillment 20
-  (props/for-all
-   [herd (s/gen ::core/herd)
-    project (s/gen ::project/project)]
-   (is (s/valid? ::core/herd (project/distribute-fulfillment herd project)))))
-
-(defspec test-can-enact? 20
-  (props/for-all
-   [herd (s/gen ::core/herd)
-    project (s/gen ::project/project)]
-   (println herd project)
-   (is (s/valid? boolean? (project/can-enact? herd project)))))
+    `project/update-individual-fulfillment
+    `project/distribute-experience
+    `project/distribute-fulfillment
+    `project/can-enact?]))
 
 (defspec test-enact-project 20
   (props/for-all

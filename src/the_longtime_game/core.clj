@@ -27,7 +27,28 @@
                 :steppe
                 :mountain})
 
-(def traits #{:todo}) ; TODO
+(def traits #{:angry
+              :kind
+              :pensive
+              :loving
+              :fierce
+              :devoted
+              :sickly
+              :wounded
+              :attentive
+              :absent-minded
+              :depressed
+              :mystical
+              :weary
+              :optimistic
+              :pessimistic
+              :poet
+              :dancer})
+
+(def negative-traits #{:sickly
+                       :wounded
+                       :depressed
+                       :weary})
 
 (def skill-ranks ["unfamiliar"
                   "novice"
@@ -38,9 +59,9 @@
 
 (def max-age 50)
 (def adulthood 20)
-(def death-modifier 2/3)
-(def optimal-pops-per-stage 20)
+(def death-modifier 2)
 (def birth-modifier 2)
+(def optimal-pops-per-stage 50)
 (def max-hunger 4)
 (def max-infrastructure 4)
 (def max-skill (count skill-ranks))
@@ -105,7 +126,7 @@
   :fn (fn [{:keys [ret]}]
         (re-matches #"\w{2}-\w{2}" ret)))
 
-(s/def ::born int?)
+(s/def ::born (s/int-in -10000 10000))
 (s/def ::passions (s/coll-of ::skill
                              :kind set?
                              :min-count 0
@@ -136,7 +157,7 @@
 (s/fdef get-age
   :args (s/cat :herd (s/keys :req-un [::month])
                :individual (s/keys :req-un [::born]))
-  :ret nat-int?)
+  :ret int?)
 
 (defn becomes-passionate?
   [used {:keys [passions]}]
@@ -230,7 +251,9 @@
   :args (s/cat :herd (s/keys :req-un [::month]))
   :ret ::individual)
 
-(s/def ::individuals (s/coll-of ::individual))
+(s/def ::individuals (s/coll-of ::individual
+                                :min-count 1
+                                :max-count 1000))
 
 (defn gen-individuals [herd n]
   (for [_ (range n)
@@ -411,11 +434,14 @@
 (s/def ::resource resources)
 (s/def ::stores (s/map-of ::resource nat-int?))
 (s/def ::locations (s/coll-of ::location :min-count 1))
-(s/def ::path (s/coll-of ::locations :kind vector? :min-count 1))
+(s/def ::path (s/coll-of ::locations
+                         :kind vector?
+                         :min-count 1
+                         :max-count 12))
 (s/def ::hunger (s/int-in 0 (+ 1 max-hunger)))
-(s/def ::sickness nat-int?)
+(s/def ::sickness (s/int-in 0 10000))
 (s/def ::index nat-int?)
-(s/def ::month nat-int?)
+(s/def ::month (s/and nat-int? (s/int-in 0 10000)))
 
 (defn gen-herd
   ([]
@@ -461,7 +487,7 @@
                      ::index
                      ::month
                      ::path])
-    #(g/fmap (fn [[individuals syndicates]]
+    #(g/fmap (fn [[individuals syndicates month]]
                {:individuals individuals
                 :syndicates syndicates
                 :stores (reduce
@@ -472,14 +498,15 @@
                 :hunger (rand-int max-hunger)
                 :sickness (rand-int (count individuals))
                 :index 0
-                :month (s/int-in 0 12)
+                :month month
                 :path [[(init-location :plains)]
                        [(init-location :forest)]
                        [(init-location :mountain)]
                        [(init-location :steppe)]]})
              (g/tuple
               (s/gen ::individuals)
-              (s/gen ::syndicates)))))
+              (s/gen ::syndicates)
+              (s/gen ::month)))))
 
 (s/fdef gen-herd
   :args (s/alt :basic
@@ -515,25 +542,25 @@
                    (- 1 (/ hunger max-hunger))
                    (- 1 (/ sickness population)))
         births (-> (- optimal population)
-                   (/ optimal)
+                   (/ (max optimal 1))
                    (+ 1)
                    (* birth-modifier)
+                   (max 2)
+                   (min 100)
                    int
                    rand-int)]
     births))
 
 (s/fdef birth-chance
-  :args (s/cat :herd (s/keys :req-un [::hunger
-                                      ::sickness
-                                      ::individuals
-                                      ::path]))
+  :args (s/cat :herd ::herd)
   :ret nat-int?)
 
 (defn death-chance
   [{:keys [hunger sickness individuals] :as herd} individual]
-  (* (/ (get-age herd individual) max-age)
-     (+ 1 (/ hunger max-hunger))
-     (+ 1 (/ sickness (count individuals)))))
+  (let [age (get-age herd individual)]
+    (* (/ age max-age)
+       (+ 1 (/ hunger max-hunger))
+       (+ 1 (/ sickness (count individuals))))))
 
 (s/fdef death-chance
   :args (s/cat :herd ::herd
@@ -568,7 +595,7 @@
   (int (/ (rem month 12) 3)))
 
 (s/fdef get-season
-  :args (s/cat :herd ::herd)
+  :args (s/cat :herd (s/keys :req-un [::month]))
   :ret ::season)
 
 (defn individual-skill
@@ -622,7 +649,7 @@
 
 (s/fdef carry-limit
   :args (s/cat :herd ::herd)
-  :ret pos-int?)
+  :ret nat-int?)
 
 (defn keep-and-leave-behind
   [herd carrying]
