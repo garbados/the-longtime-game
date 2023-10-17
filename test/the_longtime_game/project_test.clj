@@ -24,13 +24,13 @@
 (defspec test-distribute-experience 20
   (props/for-all
    [herd (s/gen ::core/herd)
-    project (g/elements project/projects)]
+    project (s/gen ::project/project)]
    (is (s/valid? ::core/herd (project/distribute-experience herd project)))))
 
 (defspec test-distribute-fulfillment 20
   (props/for-all
    [herd (s/gen ::core/herd)
-    project (g/elements project/projects)]
+    project (s/gen ::project/project)]
    (is (s/valid? ::core/herd (project/distribute-fulfillment herd project)))))
 
 (defspec test-can-enact? 20
@@ -46,6 +46,6 @@
    (g/let [project (g/such-that
                     (fn [project]
                       (project/can-enact? herd project))
-                    (g/elements project/projects))]
+                    (s/gen ::project/project))]
      (is (s/valid? ::core/herd
                    (project/enact-project herd project))))))
