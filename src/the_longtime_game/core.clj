@@ -99,21 +99,17 @@
 
 (s/def ::name string?)
 
-(s/def ::minot-name
-  (s/with-gen ::name
-    #(g/fmap (partial string/join "-")
-             (g/tuple (g/elements first-syllable)
-                      (g/elements second-syllable)))))
-
 (s/fdef gen-name
   :args (s/cat)
-  :ret ::minot-name)
+  :ret ::name
+  :fn (fn [{:keys [ret]}]
+        (re-matches #"\w{2}-\w{2}" ret)))
 
 (s/def ::born int?)
 (s/def ::passions (s/coll-of ::skill
                              :kind set?
                              :min-count 0
-                             :max-count max-passions))
+                             :max-count (inc max-passions)))
 (s/def ::skill skills)
 (s/def ::skills (s/map-of ::skill (s/int-in 0 (inc max-skill))))
 (s/def ::uses (s/coll-of ::skill))
@@ -125,7 +121,9 @@
   (let [skill (rand-nth (vec skills))
         rank (get skills* skill 0)]
     (if (= rank max-skill)
-      (inc-some-skill skills*)
+      (if (= max-skill (reduce min (vals skills*)))
+        skills*
+        (inc-some-skill skills*))
       (assoc skills* skill (inc rank)))))
 
 (s/fdef inc-some-skill
@@ -232,9 +230,7 @@
   :args (s/cat :herd (s/keys :req-un [::month]))
   :ret ::individual)
 
-(s/def ::individuals (s/coll-of ::individual
-                                :min-count 1
-                                :max-count 1000))
+(s/def ::individuals (s/coll-of ::individual))
 
 (defn gen-individuals [herd n]
   (for [_ (range n)
@@ -243,7 +239,7 @@
 
 (s/fdef gen-individuals
   :args (s/cat :herd (s/keys :req-un [::month])
-               :n (s/int-in 1 50))
+               :n (s/int-in 1 max-age))
   :ret ::individuals)
 
 (s/def ::ethos (s/coll-of ::skill :kind set? :count 2))
@@ -268,7 +264,8 @@
       rank)))
 
 (s/fdef calculate-vote
-  :args (s/cat :individual ::individual
+  :args (s/cat :individual (s/keys :req-un [::skills
+                                            ::passions])
                :skill ::skill)
   :ret nat-int?)
 
@@ -291,7 +288,9 @@
        (sort-by second >)))
 
 (s/fdef tally-votes
-  :args (s/cat :individuals ::individuals)
+  :args (s/cat :individuals (s/coll-of
+                             (s/keys :req-un [::skills
+                                              ::passions])))
   :ret (s/coll-of (s/tuple ::skill nat-int?)))
 
 (defn rank-candidates [votes]
@@ -423,33 +422,34 @@
    (gen-herd {:hunger 0
               :sickness 0
               :month 0}))
-  ([{:keys [hunger sickness month] :as herd}]
-   (let [individuals (gen-individuals herd (rand-int 50))
+  ([{:keys [hunger sickness month]}]
+   (let [herd {:hunger (or hunger 0)
+               :sickness (or sickness 0)
+               :month (or month 0)}
+         individuals (gen-individuals herd (rand-int 50))
          {:keys [syndicates]}
          (-> {:individuals individuals
               :syndicates #{}}
              add-syndicate
              (update :syndicates conj
                      (set (take 2 (shuffle (vec skills))))))]
-     (gen-herd individuals syndicates {:hunger hunger
-                                       :sickness sickness
-                                       :month month})))
+     (gen-herd individuals syndicates herd)))
   ([individuals syndicates {:keys [hunger sickness month]}]
-   {:individuals individuals
-    :syndicates syndicates
-    :stores (reduce
-             (fn [all resource]
-               (assoc all resource 0))
-             {}
-             resources)
-    :hunger hunger
-    :sickness sickness
-    :index 0
-    :month month
-    :path [[(init-location :plains)]
-           [(init-location :forest)]
-           [(init-location :mountain)]
-           [(init-location :steppe)]]}))
+   (merge {:hunger (or hunger 0)
+           :sickness (or sickness 0)
+           :month (or month 0)}
+          {:individuals individuals
+           :syndicates syndicates
+           :stores (reduce
+                    (fn [all resource]
+                      (assoc all resource 0))
+                    {}
+                    resources)
+           :index 0
+           :path [[(init-location :plains)]
+                  [(init-location :forest)]
+                  [(init-location :mountain)]
+                  [(init-location :steppe)]]})))
 
 (s/def ::herd
   (s/with-gen
@@ -469,10 +469,10 @@
                            (assoc all resource 50))
                          {}
                          resources)
-                :hunger 0
-                :sickness 0
+                :hunger (rand-int max-hunger)
+                :sickness (rand-int (count individuals))
                 :index 0
-                :month 0
+                :month (s/int-in 0 12)
                 :path [[(init-location :plains)]
                        [(init-location :forest)]
                        [(init-location :mountain)]
@@ -480,6 +480,23 @@
              (g/tuple
               (s/gen ::individuals)
               (s/gen ::syndicates)))))
+
+(s/fdef gen-herd
+  :args (s/alt :basic
+               (s/cat)
+               :minimal
+               (s/cat :herd
+                      (s/keys :opt-un [::hunger
+                                       ::sickness
+                                       ::month]))
+               :full
+               (s/cat :individuals ::individuals
+                      :syndicates ::syndicates
+                      :herd
+                      (s/keys :opt-un [::hunger
+                                       ::sickness
+                                       ::month])))
+  :ret ::herd)
 
 (defn current-location
   [herd]
@@ -505,6 +522,13 @@
                    rand-int)]
     births))
 
+(s/fdef birth-chance
+  :args (s/cat :herd (s/keys :req-un [::hunger
+                                      ::sickness
+                                      ::individuals
+                                      ::path]))
+  :ret nat-int?)
+
 (defn death-chance
   [{:keys [hunger sickness individuals] :as herd} individual]
   (* (/ (get-age herd individual) max-age)
@@ -516,7 +540,7 @@
                :individual ::individual)
   :ret (s/and number? #(>= % 0)))
 
-(defn died?
+(defn has-died?
   [herd individual]
   (let [chance (death-chance herd individual)
         rolled (* chance (rand-int max-age))
@@ -524,7 +548,7 @@
         passed? (> rolled threshold)]
     passed?))
 
-(s/fdef died?
+(s/fdef has-died?
   :args (s/cat :herd ::herd
                :individual ::individual)
   :ret boolean?)
@@ -532,6 +556,11 @@
 (defn local-infra? [herd infra]
   (let [location (current-location herd)]
     (contains? (:infra location) infra)))
+
+(s/fdef local-infra?
+  :args (s/cat :herd ::herd
+               :infra infrastructure)
+  :ret boolean?)
 
 (s/def ::season (s/int-in 0 4))
 
@@ -672,6 +701,13 @@
             (vec
              (for [location stage]
                (f location)))))))
+
+(s/fdef map-locations
+  :args (s/cat :f (s/fspec
+                   :args (s/cat :location ::location)
+                   :ret ::location)
+               :herd (s/keys :req-un [::path]))
+  :ret (s/keys :req-un [::path]))
 
 (defn has-lost? [herd]
   (= max-hunger (:hunger herd)))
@@ -815,7 +851,11 @@
         3 (map-locations enter-winter herd))
       herd*)))
 
-(s/def ::uses (s/coll-of ::skill))
+(s/fdef inc-month
+  :args (s/cat :herd ::herd)
+  :ret ::herd)
+
+(s/def ::uses (s/coll-of skills :distinct true))
 
 (defn gains-experience?
   [used syndicates {:keys [passions skills]}]
@@ -869,5 +909,13 @@
 (defn pre-location [herd]
   (inc-month herd))
 
+(s/fdef pre-location
+  :args (s/cat :herd ::herd)
+  :ret ::herd)
+
 (defn post-location [herd]
   (apply-herd-upkeep herd))
+
+(s/fdef post-location
+  :args (s/cat :herd ::herd)
+  :ret ::herd)

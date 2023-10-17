@@ -23,7 +23,7 @@
     `core/current-location
     `core/birth-chance
     `core/death-chance
-    `core/died?
+    `core/has-died?
     `core/local-infra?
     `core/get-season
     `core/individual-skill
