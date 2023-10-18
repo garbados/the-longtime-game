@@ -459,9 +459,9 @@
          {:keys [syndicates]}
          (-> {:individuals individuals
               :syndicates #{}}
-             add-syndicate
              (update :syndicates conj
-                     (set (take 2 (shuffle (vec skills))))))]
+                     (set (take 2 (shuffle (vec skills)))))
+             add-syndicate)]
      (gen-herd individuals syndicates herd)))
   ([individuals syndicates {:keys [hunger sickness month]}]
    (merge {:hunger (or hunger 0)
