@@ -7,7 +7,7 @@
   [{:name "Plague"
     :select {}
     :marshal-fn
-    (fn [herd]
+    (fn [_ herd]
       (and (<= 50 (get-in herd [:stores :poultices] 0))
            (>= (core/collective-skill herd :medicine)
                (/ (count (:individuals herd)) 2))))
@@ -76,6 +76,7 @@
 (s/def ::filter-fn ifn?)
 (s/def ::effect ifn?)
 (s/def ::marshal-fn ifn?)
+(s/def ::choices-fn ifn?)
 (s/def ::text-fn ifn?)
 
 (s/def ::event
@@ -92,12 +93,12 @@
 (s/def ::dream
   (s/with-gen
     (s/keys :req-un [::core/name
-                     ::filter
                      ::character
+                     ::choices-fn
                      ::effect
-                     ::marshal-fn
                      ::text-fn]
-            :opt-un [::filter-fn])
+            :opt-un [::filter
+                     ::filter-fn])
     #(g/elements dreams)))
 
 (s/def ::births (s/coll-of ::core/individual))
@@ -112,7 +113,30 @@
                    ::projects
                    ::dreams]))
 
-(defn can-trigger?
+(defn match-select [herd individual {:keys [traits skills max-age min-age]}]
+  (and (if traits
+         (every? some? (for [trait traits]
+                         (-> individual :traits trait)))
+         true)
+       (if skills
+         (every? true? (for [[skill value] skills]
+                         (-> individual :skills skill (>= value))))
+         true)
+       (let [age (core/get-age herd individual)]
+         (and (if max-age
+                (< age max-age)
+                true)
+              (if min-age
+                (> age min-age)
+                true)))))
+
+(s/fdef match-select
+  :args (s/cat :herd ::core/herd
+               :individual ::core/individual
+               :select ::select)
+  :ret boolean?)
+
+(defn can-event-trigger?
   [herd event]
   (let [location (core/current-location herd)]
     (and (if-let [terrain (get-in event [:filter :terrain])]
@@ -128,30 +152,58 @@
               (>= amount required))))
          (every?
           true?
-          (for [{:keys [traits skills max-age min-age]} (:select event [])]
+          (for [select (:select event)]
             (first
              (for [individual (:individuals herd)
-                   :when (and (every? some? (for [trait traits]
-                                              (-> individual :traits trait)))
-                              (every? true? (for [[skill value] skills]
-                                              (-> individual :skills skill (>= value))))
-                              (let [age (core/get-age herd individual)]
-                                (and (if max-age
-                                       (< age max-age)
-                                       true)
-                                     (if min-age
-                                       (> age min-age)
-                                       true))))]
+                   :when (match-select herd individual select)]
                true))))
-         
          (if-let [filter-fn (:filter-fn event)]
            (boolean (filter-fn herd))
            true))))
 
-(s/fdef can-trigger?
+(s/fdef can-event-trigger?
   :args (s/cat :herd ::core/herd
                :event ::event)
   :ret boolean?)
 
-(defn get-character
-  [herd character])
+(defn can-dream-trigger?
+  [herd dream]
+  )
+
+(defn find-character [herd character-select]
+  (first
+   (for [individual (shuffle (:individuals herd))
+         :when (match-select herd individual character-select)]
+     individual)))
+
+(s/fdef find-character
+  :args (s/cat :herd ::core/herd
+               :character-select ::character)
+  :ret (s/nilable ::core/individual))
+
+(defn get-cast [herd event]
+  (for [character-select (:select event)]
+    (find-character herd character-select)))
+
+(s/fdef get-cast
+  :args (s/cat :herd ::core/herd
+               :event ::event)
+  :ret (s/coll-of (s/nilable ::core/individual)))
+
+(defn enact-event
+  [info herd {:keys [marshal-fn effect text-fn] :as event}]
+  (let [characters (get-cast herd event)
+        marshalled (marshal-fn info herd)
+        text (text-fn info herd characters marshalled)
+        [info herd] (effect info herd characters marshalled)]
+    [info herd text]))
+
+(s/fdef enact-event
+  :args (s/cat :info ::info
+               :herd ::core/herd
+               :event ::event)
+  :ret (s/tuple ::info ::core/herd string?))
+
+(defn get-dream-choices
+  [info herd dream character]
+  ((:choices-fn dream) info herd character))
