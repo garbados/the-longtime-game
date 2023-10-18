@@ -254,7 +254,6 @@
                  (partial map #(core/inc-fulfillment % amount)))))}]))
 
 (s/def ::skills (s/map-of ::core/skill pos-int?))
-(s/def ::terrain (s/nilable core/terrains))
 (s/def ::filter
   (s/keys :opt-un [::core/season
                    ::terrain
@@ -327,7 +326,7 @@
   [herd project]
   (let [location (core/current-location herd)]
     (and (if-let [terrain (get-in project [:filter :terrain])]
-           (= (:type location) terrain)
+           (= (:terrain location) terrain)
            true)
          (if-let [season (get-in project [:filter :season])]
            (= (core/get-season herd) season)

@@ -359,7 +359,7 @@
   :args (s/cat :herd (s/keys :req-un [::syndicates]))
   :ret (s/keys :req-un [::syndicates]))
 
-(s/def ::type terrains)
+(s/def ::terrain terrains)
 (s/def ::infrastructure infrastructure)
 (s/def ::infra (s/coll-of ::infrastructure :kind set?))
 (s/def ::nutrient (s/int-in 0 4))
@@ -375,7 +375,7 @@
 (defn init-location [terrain]
   (case terrain
     :plains
-    {:type :plains
+    {:terrain :plains
      :infra #{}
      :n 2
      :k 2
@@ -384,27 +384,27 @@
      :wild? false
      :ready? nil}
     :forest
-    {:type :forest
+    {:terrain :forest
      :infra #{}
      :flora 1
      :depleted? false}
     :mountain
-    {:type :mountain
+    {:terrain :mountain
      :infra #{}}
     :steppe
-    {:type :steppe}
+    {:terrain :steppe}
     :swamp
-    {:type :swamp
+    {:terrain :swamp
      :infra #{}
      :depleted? false}
     :jungle
-    {:type :jungle
+    {:terrain :jungle
      :infra #{}}))
 
 (s/def ::location
   (s/with-gen
     (s/and
-     (s/keys :req-un [::type])
+     (s/keys :req-un [::terrain])
      (s/or
       :plains (s/keys :req-un [::infra
                                ::n
@@ -448,11 +448,14 @@
    (gen-herd {:hunger 0
               :sickness 0
               :month 0}))
-  ([{:keys [hunger sickness month]}]
-   (let [herd {:hunger (or hunger 0)
-               :sickness (or sickness 0)
-               :month (or month 0)}
-         individuals (gen-individuals herd (rand-int 50))
+  ([{:keys [hunger sickness month]
+     :or {hunger 0
+          sickness 0
+          month 0}}]
+   (let [herd {:hunger hunger
+               :sickness sickness
+               :month month}
+         individuals (gen-individuals herd (+ 40 (rand-int 20)))
          {:keys [syndicates]}
          (-> {:individuals individuals
               :syndicates #{}}
@@ -487,26 +490,23 @@
                      ::index
                      ::month
                      ::path])
-    #(g/fmap (fn [[individuals syndicates month]]
+    #(g/fmap (fn [[individuals syndicates path stores hunger month sickness]]
                {:individuals individuals
                 :syndicates syndicates
-                :stores (reduce
-                         (fn [all resource]
-                           (assoc all resource 50))
-                         {}
-                         resources)
-                :hunger (rand-int max-hunger)
-                :sickness (rand-int (count individuals))
+                :stores stores
+                :hunger hunger
+                :sickness (min sickness (count individuals))
                 :index 0
                 :month month
-                :path [[(init-location :plains)]
-                       [(init-location :forest)]
-                       [(init-location :mountain)]
-                       [(init-location :steppe)]]})
+                :path path})
              (g/tuple
               (s/gen ::individuals)
               (s/gen ::syndicates)
-              (s/gen ::month)))))
+              (s/gen ::path)
+              (s/gen ::stores)
+              (s/gen ::hunger)
+              (s/gen ::month)
+              (s/gen ::sickness)))))
 
 (s/fdef gen-herd
   :args (s/alt :basic
@@ -791,11 +791,11 @@
 (defn enter-spring
   [location]
   (cond
-    (= :forest (:type location))
+    (= :forest (:terrain location))
     (cond-> (assoc location :depleted? false)
       (> 2 (:flora location))
       (update :flora inc))
-    (= :swamp (:type location))
+    (= :swamp (:terrain location))
     (assoc location :depleted? false)
     :else
     location))
@@ -806,7 +806,7 @@
 
 (defn enter-summer
   [location]
-  (if (= :plains (:type location))
+  (if (= :plains (:terrain location))
     (cond
       ;; plains is fallow
       ;; restore one of each nutrient
@@ -847,7 +847,7 @@
 
 (defn enter-winter
   [location]
-  (if (= :plains (:type location))
+  (if (= :plains (:terrain location))
     (if (and (some? (:crop location))
              (true? (:ready? location))
              (false? (:wild? location)))
