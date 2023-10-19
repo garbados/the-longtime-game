@@ -52,7 +52,8 @@
    {:name "Fallen in love"}])
 
 (def dreams
-  [{:name "Purpose"}
+  [{:name "Purpose"
+    :character {:max-passions 2}}
    {:name "Doubt"}
    {:name "Exhaustion"}
    {:name "Gratitude"}
@@ -60,18 +61,21 @@
    {:name "Joy"}
    {:name "Growth"}])
 
+(s/def ::passions (s/int-in 0 4))
+(s/def ::min-passions ::passions)
+(s/def ::max-passions ::passions)
 (s/def ::age (s/int-in 15 core/max-age))
 (s/def ::min-age ::age)
 (s/def ::max-age ::age)
 (s/def ::character (s/keys :opt-un [::core/traits
                                     ::core/skills
+                                    ::min-passions
+                                    ::max-passions
                                     ::min-age
                                     ::max-age]))
 (s/def ::select (s/coll-of ::character))
-(s/def ::skills (s/map-of ::core/skill pos-int?))
 (s/def ::filter (s/keys :opt-un [::core/season
                                  ::terrain
-                                 ::skills
                                  ::core/stores]))
 (s/def ::filter-fn ifn?)
 (s/def ::effect ifn?)
@@ -136,40 +140,6 @@
                :select ::select)
   :ret boolean?)
 
-(defn can-event-trigger?
-  [herd event]
-  (let [location (core/current-location herd)]
-    (and (if-let [terrain (get-in event [:filter :terrain])]
-           (= (:terrain location) terrain)
-           true)
-         (if-let [season (get-in event [:filter :season])]
-           (= (core/get-season herd) season)
-           true)
-         (every?
-          true?
-          (for [[resource required] (get-in event [:filter :stores] [])]
-            (let [amount (get-in herd [:stores resource] 0)]
-              (>= amount required))))
-         (every?
-          true?
-          (for [select (:select event)]
-            (first
-             (for [individual (:individuals herd)
-                   :when (match-select herd individual select)]
-               true))))
-         (if-let [filter-fn (:filter-fn event)]
-           (boolean (filter-fn herd))
-           true))))
-
-(s/fdef can-event-trigger?
-  :args (s/cat :herd ::core/herd
-               :event ::event)
-  :ret boolean?)
-
-(defn can-dream-trigger?
-  [herd dream]
-  )
-
 (defn find-character [herd character-select]
   (first
    (for [individual (shuffle (:individuals herd))
@@ -189,6 +159,54 @@
   :args (s/cat :herd ::core/herd
                :event ::event)
   :ret (s/coll-of (s/nilable ::core/individual)))
+
+(defn can-event-trigger?
+  [herd event]
+  (let [location (core/current-location herd)]
+    (and (if-let [terrain (get-in event [:filter :terrain])]
+           (= (:terrain location) terrain)
+           true)
+         (if-let [season (get-in event [:filter :season])]
+           (= (core/get-season herd) season)
+           true)
+         (every?
+          true?
+          (for [[resource required] (get-in event [:filter :stores] [])]
+            (let [amount (get-in herd [:stores resource] 0)]
+              (>= amount required))))
+         (if-let [filter-fn (:filter-fn event)]
+           (boolean (filter-fn herd))
+           true)
+         (every?
+          some?
+          (for [character-select (:select event)]
+            (find-character herd character-select))))))
+
+(s/fdef can-event-trigger?
+  :args (s/cat :herd ::core/herd
+               :event ::event)
+  :ret boolean?)
+
+(defn can-dream-trigger?
+  [info herd dream]
+  (let [location (core/current-location herd)]
+    (and (if-let [terrain (get-in dream [:filter :terrain])]
+           (= (:terrain location) terrain)
+           true)
+         (if-let [season (get-in dream [:filter :season])]
+           (= (core/get-season herd) season)
+           true)
+         (every?
+          true?
+          (for [[resource required] (get-in dream [:filter :stores] [])]
+            (let [amount (get-in herd [:stores resource] 0)]
+              (>= amount required))))
+         (if-let [filter-fn (:filter-fn dream)]
+           (boolean (filter-fn herd))
+           true)
+         (if-let [individual (find-character herd (:character dream))]
+           (< 0 (count ((:choices-fn dream) info herd individual)))
+           false))))
 
 (defn enact-event
   [info herd {:keys [marshal-fn effect text-fn] :as event}]
