@@ -61,6 +61,18 @@
    {:name "Joy"}
    {:name "Growth"}])
 
+(s/def ::births (s/coll-of ::core/individual))
+(s/def ::deaths (s/coll-of ::core/individual))
+(s/def ::event (s/nilable string?))
+(s/def ::projects (s/coll-of string?))
+(s/def ::dreams (s/coll-of string?))
+(s/def ::info
+  (s/keys :req-un [::births
+                   ::deaths
+                   ::event
+                   ::projects
+                   ::dreams]))
+
 (s/def ::passions (s/int-in 0 4))
 (s/def ::min-passions ::passions)
 (s/def ::max-passions ::passions)
@@ -77,9 +89,34 @@
 (s/def ::filter (s/keys :opt-un [::core/season
                                  ::terrain
                                  ::core/stores]))
-(s/def ::filter-fn ifn?)
-(s/def ::effect ifn?)
-(s/def ::marshal-fn ifn?)
+(s/def ::filter-fn
+  (s/fspec :args (s/cat :info ::info
+                        :herd ::core/herd)
+           :ret boolean?))
+(s/def :event/effect
+  (s/fspec :args (s/cat :info ::info
+                        :herd ::core/herd
+                        :cast ::core/individuals
+                        :marshalled any?)
+           :ret (s/tuple ::info ::core/herd)))
+(s/def :event/marshal-fn
+  (s/fspec
+   :args (s/cat :info ::info
+                :herd ::core/herd
+                :cast ::core/individuals)
+   :ret any?))
+(s/def :dream/effect
+  (s/fspec :args (s/cat :info ::info
+                        :herd ::core/herd
+                        :individual ::core/individual
+                        :marshalled any?)
+           :ret (s/tuple ::info ::core/herd)))
+(s/def :dream/marshal-fn
+  (s/fspec
+   :args (s/cat :info ::info
+                :herd ::core/herd
+                :individual ::core/individual)
+   :ret any?))
 (s/def ::choices-fn ifn?)
 (s/def ::text-fn ifn?)
 
@@ -87,8 +124,8 @@
   (s/with-gen
     (s/keys :req-un [::core/name
                      ::select
-                     ::effect
-                     ::marshal-fn
+                     :event/effect
+                     :event/marshal-fn
                      ::text-fn]
             :opt-un [::filter
                      ::filter-fn])
@@ -99,23 +136,11 @@
     (s/keys :req-un [::core/name
                      ::character
                      ::choices-fn
-                     ::effect
+                     :dream/effect
                      ::text-fn]
             :opt-un [::filter
                      ::filter-fn])
     #(g/elements dreams)))
-
-(s/def ::births (s/coll-of ::core/individual))
-(s/def ::deaths (s/coll-of ::core/individual))
-(s/def ::event (s/nilable string?))
-(s/def ::projects (s/coll-of string?))
-(s/def ::dreams (s/coll-of string?))
-(s/def ::info
-  (s/keys :req-un [::births
-                   ::deaths
-                   ::event
-                   ::projects
-                   ::dreams]))
 
 (defn match-select [herd individual {:keys [traits skills max-age min-age]}]
   (and (if traits
@@ -161,7 +186,7 @@
   :ret (s/coll-of (s/nilable ::core/individual)))
 
 (defn can-event-trigger?
-  [herd event]
+  [info herd event]
   (let [location (core/current-location herd)]
     (and (if-let [terrain (get-in event [:filter :terrain])]
            (= (:terrain location) terrain)
@@ -175,7 +200,7 @@
             (let [amount (get-in herd [:stores resource] 0)]
               (>= amount required))))
          (if-let [filter-fn (:filter-fn event)]
-           (boolean (filter-fn herd))
+           (boolean (filter-fn info herd))
            true)
          (every?
           some?
