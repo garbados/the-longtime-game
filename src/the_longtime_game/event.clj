@@ -1,7 +1,8 @@
 (ns the-longtime-game.event
-  (:require [clojure.spec.alpha :as s]
-            [the-longtime-game.core :as core]
-            [clojure.test.check.generators :as g]))
+  (:require [clojure.set :refer [difference]]
+            [clojure.spec.alpha :as s]
+            [clojure.test.check.generators :as g]
+            [the-longtime-game.core :as core]))
 
 (def events
   [{:name "Plague"
@@ -53,11 +54,41 @@
 
 (def dreams
   [{:name "Purpose"
-    :character {:max-passions 2}}
-   {:name "Doubt"}
+    :select [{:max-passions 2}]
+    :marshal-fn
+    (constantly nil)
+    :choices-fn
+    (fn [_info _herd [dreamer]]
+      (->> (:passions dreamer)
+           (difference core/skills)
+           vec
+           shuffle
+           (take 2)))
+    :effect
+    (fn [info herd cast _ skill]
+      [info
+       (core/update-individual
+        herd
+        (first cast)
+        #(update % :passions conj skill))])
+    :text-fn (constantly "a cow wonders about their purpose")}
+   {:name "Doubt"
+    :select [{:traits #{:depressed}}]}
    {:name "Exhaustion"}
-   {:name "Gratitude"}
-   {:name "Grief"}
+   {:name "Gratitude"
+    :select [{}]
+    :filter-fn
+    (fn [_ herd]
+      (< 70 (/ (reduce + (map :fulfillment (:individuals herd)))
+               (count (:individuals herd)))))}
+   {:name "Grief"
+    :select [{}]
+    :filter-fn
+    (fn [{:keys [deaths]} _]
+      (< 0 (count deaths)))
+    :marshal-fn
+    (fn [{:keys [deaths]} _ _]
+      (rand-nth deaths))}
    {:name "Joy"}
    {:name "Growth"}])
 
@@ -93,53 +124,67 @@
   (s/fspec :args (s/cat :info ::info
                         :herd ::core/herd)
            :ret boolean?))
+(s/def ::marshal-fn
+  (s/fspec
+   :args (s/cat :info ::info
+                :herd ::core/herd
+                :cast ::core/individuals)))
 (s/def :event/effect
   (s/fspec :args (s/cat :info ::info
                         :herd ::core/herd
                         :cast ::core/individuals
                         :marshalled any?)
            :ret (s/tuple ::info ::core/herd)))
-(s/def :event/marshal-fn
-  (s/fspec
-   :args (s/cat :info ::info
-                :herd ::core/herd
-                :cast ::core/individuals)
-   :ret any?))
 (s/def :dream/effect
   (s/fspec :args (s/cat :info ::info
                         :herd ::core/herd
-                        :individual ::core/individual
-                        :marshalled any?)
+                        :cast ::core/individuals
+                        :marshalled any?
+                        :choice any?)
            :ret (s/tuple ::info ::core/herd)))
-(s/def :dream/marshal-fn
-  (s/fspec
-   :args (s/cat :info ::info
-                :herd ::core/herd
-                :individual ::core/individual)
-   :ret any?))
-(s/def ::choices-fn ifn?)
-(s/def ::text-fn ifn?)
+(s/def ::choices-fn
+  (s/fspec :args (s/cat :info ::info
+                        :herd ::core/herd
+                        :cast ::core/individuals
+                        :marshalled any?)
+           :ret any?))
+(s/def :event/text-fn
+  (s/fspec :args (s/cat :info ::info
+                        :herd ::core/herd
+                        :cast ::core/individuals
+                        :marshalled any?)
+           :ret string?))
+(s/def :dream/text-fn
+  (s/fspec :args (s/cat :info ::info
+                        :herd ::core/herd
+                        :cast ::core/individuals
+                        :marshalled any?
+                        :choice any?)
+           :ret string?))
 
 (s/def ::event
   (s/with-gen
     (s/keys :req-un [::core/name
                      ::select
                      :event/effect
-                     :event/marshal-fn
-                     ::text-fn]
+                     ::marshal-fn
+                     :event/text-fn]
             :opt-un [::filter
                      ::filter-fn])
     #(g/elements events)))
 
 (s/def ::dream
   (s/with-gen
-    (s/keys :req-un [::core/name
-                     ::character
-                     ::choices-fn
-                     :dream/effect
-                     ::text-fn]
-            :opt-un [::filter
-                     ::filter-fn])
+    (s/and
+     (s/keys :req-un [::core/name
+                      ::select
+                      :dream/effect
+                      ::marshal-fn
+                      ::choices-fn
+                      :dream/text-fn]
+             :opt-un [::filter
+                      ::filter-fn])
+     #(< 0 (count (:select %))))
     #(g/elements dreams)))
 
 (defn match-select [herd individual {:keys [traits skills max-age min-age]}]
@@ -167,7 +212,7 @@
 
 (defn find-character [herd character-select]
   (first
-   (for [individual (shuffle (:individuals herd))
+   (for [individual (:individuals herd)
          :when (match-select herd individual character-select)]
      individual)))
 
@@ -250,3 +295,7 @@
 (defn get-dream-choices
   [info herd dream character]
   ((:choices-fn dream) info herd character))
+
+(defn enact-dream
+  [info herd dream cast marshalled choice]
+  ((:effect dream) info herd cast marshalled choice))

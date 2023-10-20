@@ -946,3 +946,21 @@
 (s/fdef post-location
   :args (s/cat :herd ::herd)
   :ret ::herd)
+
+(defn update-individual
+  [herd individual f & args]
+  (update herd :individuals
+          (fn [individuals]
+            (map
+             (fn [individual*]
+               (if (= individual individual*)
+                 (apply f individual args)
+                 individual*))
+             individuals))))
+
+(s/fdef update-individual
+  :args (s/cat :herd ::herd
+               :individual ::individual
+               :f ifn?
+               :rest (s/* any?))
+  :ret ::herd)
