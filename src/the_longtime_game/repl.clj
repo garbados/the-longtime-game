@@ -81,32 +81,23 @@
                 [footer])]
     (string/join "\n" lines)))
 
-(defn handle-help
-  ([]
-   ))
-
-(def predicates
-  {:help handle-help})
-
 (defn handle-read-line
-  ([s]
-   (handle-read-line s predicates))
-  ([s predicates]
-   (let [words (string/split s #" ")
-         predicate (-> words
-                       first
-                       string/trim
-                       string/lower-case)
-         int-choice (try
-                      (Integer/parseInt predicate)
-                      (catch Exception _ nil))
-         args (rest words)]
-     (cond
-       int-choice int-choice
-       (contains? predicates predicate)
-       (apply (-> predicate keyword predicates) args)
-       :else
-       nil))))
+  [s & [predicates {}]]
+  (let [words (string/split s #" ")
+        predicate (-> words
+                      first
+                      string/trim
+                      string/lower-case)
+        int-choice (try
+                     (Integer/parseInt predicate)
+                     (catch Exception _ nil))
+        args (rest words)]
+    (cond
+      int-choice int-choice
+      (contains? predicates predicate)
+      (apply (-> predicate keyword predicates) args)
+      :else
+      nil)))
 
 (defn prompt-text
   [& {:keys [prefix forbidden error]
@@ -141,4 +132,17 @@
 
 (defn select-in-range
   [prompt n]
-  )
+  (println (quote-text prompt :prefix "!"))
+  (let [answer (prompt-text)]
+    (if (and (int? answer)
+             (<= answer n))
+      answer
+      (select-in-range prompt n))))
+
+(defn await-confirmation
+  ([]
+   (await-confirmation "Press enter to proceed."))
+  ([prompt]
+   (println (quote-text prompt :prefix "!"))
+   (read-line)))
+
