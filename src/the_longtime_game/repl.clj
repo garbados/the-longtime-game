@@ -66,3 +66,79 @@
                                  :width width
                                  :raw? raw?)
                      footer]))
+
+(defn wrap-options
+  [header options & {:keys [prefix prefix-h footer]
+                     :or {prefix-h "┌"
+                          prefix "├─"
+                          footer "└────"}}]
+  (let [lines
+        (concat [(string/join " " [prefix-h header])]
+                (map
+                 (fn [option]
+                   (string/join " " [prefix option]))
+                 options)
+                [footer])]
+    (string/join "\n" lines)))
+
+(defn handle-help
+  ([]
+   ))
+
+(def predicates
+  {:help handle-help})
+
+(defn handle-read-line
+  ([s]
+   (handle-read-line s predicates))
+  ([s predicates]
+   (let [words (string/split s #" ")
+         predicate (-> words
+                       first
+                       string/trim
+                       string/lower-case)
+         int-choice (try
+                      (Integer/parseInt predicate)
+                      (catch Exception _ nil))
+         args (rest words)]
+     (cond
+       int-choice int-choice
+       (contains? predicates predicate)
+       (apply (-> predicate keyword predicates) args)
+       :else
+       nil))))
+
+(defn prompt-text
+  [& {:keys [prefix forbidden error]
+      :or {prefix "<"
+           forbidden []
+           error "That answer is not allowed."}}]
+  (print (str prefix " "))
+  (let [s (read-line)
+        x (handle-read-line s)]
+    (cond
+      (contains? forbidden x)
+      (println (quote-text error))
+      :else x)))
+
+(defn select-from-options
+  [prompt options & {:keys [may-cancel?]
+                     :or {may-cancel? false}}]
+  (let [options* (map #(string/join ". " [(inc %1) %2])
+                      (range (count options))
+                      options)]
+    (println (wrap-options prompt options*)))
+  (let [answer (prompt-text)]
+    (cond
+      (and (int? answer)
+           (< answer (count options)))
+      (nth options (dec answer))
+      (and may-cancel?
+           (= answer "cancel"))
+      nil
+      :else
+      (select-from-options prompt options :may-cancel? may-cancel?))))
+
+(defn select-in-range
+  [prompt n]
+  )
