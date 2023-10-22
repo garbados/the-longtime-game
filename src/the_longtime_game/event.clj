@@ -104,6 +104,14 @@
                    ::projects
                    ::dreams]))
 
+(defn fresh-info
+  []
+  {:births []
+   :deaths []
+   :event nil
+   :projects []
+   :dreams []})
+
 (s/def ::passions (s/int-in 0 4))
 (s/def ::min-passions ::passions)
 (s/def ::max-passions ::passions)

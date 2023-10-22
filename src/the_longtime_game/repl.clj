@@ -1,15 +1,17 @@
 (ns the-longtime-game.repl
-  (:require [the-longtime-game.core :as core]
-            [the-longtime-game.project :as project]
+  (:require [clojure.spec.alpha :as s]
+            [clojure.string :as string]
+            [clojure.test.check.generators :as g]
             [the-longtime-game.event :as event]
-            [clojure.string :as string]))
+            [the-longtime-game.project :as project]
+            [the-longtime-game.core :as core]))
 
 (defn collect-text
   [s]
   (vec
    (for [p (string/split s #"\n\n")]
      (string/join
-      "\n\n"
+      "\n"
       (for [line (string/split p #"\n")
             :let [trimmed (string/trim line)]
             :when (< 0 (count trimmed))]
@@ -146,3 +148,128 @@
    (println (quote-text prompt :prefix "!"))
    (read-line)))
 
+(defn match-prefix
+  [l]
+  (concat
+   (map (constantly "├")
+        (range (dec (count l))))
+   ["└"]))
+
+(defn print-herd
+  [{:keys [individuals syndicates] :as herd}]
+  (let [population (count individuals)
+        syndicate-names
+        (->> syndicates
+             (map core/syndicate-name)
+             sort
+             (string/join ", "))
+        skill-levels
+        (map
+         (fn [skill]
+           [skill (core/collective-skill herd skill)])
+         core/skills)]
+    (println "┌────")
+    (println "├" (:name herd))
+    (println "├─ Month:" (:month herd))
+    (println "├─ Population:" population)
+    (println "├─ Syndicates:" syndicate-names)
+    (println "├─ Location:" (:name (get (first (:path herd)) (:index herd))))
+    (println "├─ Fulfillment (avg):"
+             (as-> (:individuals herd) $
+               (map :fulfillment $)
+               (reduce + $)
+               (/ $ population)
+               (int $)))
+    (println "├─ Hunger:" (:hunger herd))
+    (println "├─ Sickness:"
+             (as-> (:sickness herd) $
+               (/ $ population)
+               (* $ 100)
+               (float $)
+               (format "%.2f" $)
+               (str $ "%")))
+    (println "├┬ Skills")
+    (let [skills (sort skill-levels)
+          prefixes (match-prefix skills)
+          skills* (map into skills prefixes)]
+      (doseq [[skill amount prefix] skills*
+              :let [name* (-> skill name string/capitalize)]]
+        (println (str "│" prefix "─ " name* ": " amount))))
+    (println "├┬ Stores")
+    (let [stores (sort (seq (:stores herd)))
+          prefixes (match-prefix stores)
+          stores* (map into stores prefixes)]
+      (doseq [[resource amount prefix] stores*
+              :let [name* (-> resource name string/capitalize)]]
+        (println (str "│" prefix "─ " name* ": " amount))))
+    (println "├┬ Next Stage" (str "(of " (count (:path herd)) ")"))
+    (let [locations (sort (map :name (second (:path herd))))
+          prefixes (match-prefix locations)
+          locations* (map vector locations prefixes)]
+      (doseq [[name* prefix] locations*]
+        (println (str "│" prefix "─ " name*))))
+    (println "└────")))
+
+(defn print-location
+  [location]
+  (println "┌────")
+  (println "├" (:name location))
+  (when-let [infra (seq (:infra location))]
+    (println "├┬ Infrastructure")
+    (let [prefixes (match-prefix infra)
+          infra* (map vector infra prefixes)]
+      (doseq [[i prefix] infra*]
+        (println (str "│" prefix "─ " i)))))
+  (when-let [stores (seq (:stores location))]
+    (println "├┬ Stored")
+    (let [stores (sort stores)
+          prefixes (match-prefix stores)
+          stores* (map into stores prefixes)]
+      (doseq [[resource amount prefix] stores*
+              :let [name* (-> resource name string/capitalize)]]
+        (println (str "│" prefix "─ " name* ": " amount)))))
+  (when (some? (:flora location))
+    (println "├─ Flora:" (:flora location)))
+  (when (some? (:depleted? location))
+    (println "├─ Depleted?" (:depleted? location)))
+  (when (= :plains (:terrain location))
+    (println "├─ Nutrients:"
+             (string/join
+              ", "
+              (map (fn [nutrient]
+                     (string/join
+                      " "
+                      [(-> nutrient
+                           name
+                           string/capitalize)
+                       (get location nutrient)]))
+                   [:n :k :p]))))
+  (when (contains? location :crop)
+    (println "├─ Crop:" (:crop location)))
+  (when (some? (:ready? location))
+    (println "├─ Ready?" (:ready? location)))
+  (when (some? (:wild? location))
+    (println "├─ Wild?" (:wild? location)))
+  (println "└────"))
+
+(defn print-individual
+  [herd individual]
+  (println "┌────")
+  (println "├" (:name individual))
+  (println "├─ Age:" (core/get-age herd individual))
+  (println "├─ Fulfillment:" (:fulfillment individual))
+  (when-let [traits (seq (:traits individual))]
+    (println "├─ Traits:" (string/join ", " traits)))
+  (when-let [passions (map name (seq (:passions individual)))]
+    (println "├─ Passions:" (string/join ", " passions)))
+  (println "├┬ Skills")
+  (let [skills (->> (:skills individual)
+                    (filter
+                     (fn [[_ amount]]
+                       (> amount 0)))
+                    sort)
+        skills* (map into skills (match-prefix skills))]
+    (doseq [[skill amount prefix] skills*
+            :let [name* (-> skill name string/capitalize)]]
+      (println (str "│" prefix "─ " name* ": " amount))))
+  (println "└────"))

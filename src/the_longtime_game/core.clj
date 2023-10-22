@@ -50,6 +50,31 @@
                        :depressed
                        :weary})
 
+(def location-names
+  ["Yuliak"
+   "Gran"
+   "Ekab"
+   "Qux"
+   "U'otl"
+   "Un"
+   "Oplith"
+   "Imun"
+   "Ikoleb"
+   "Tux"
+   "M'enli"
+   "Wa'ifcha"
+   "Eu"
+   "Hagra"
+   "Gurip"
+   "Eol"
+   "Yut"])
+
+(def herd-names
+  ["They of One Thousand Oaks"
+   "Kin of the Season-Wheel"
+   "Brash-Mane Stampede"
+   "They of Horn and Thorn"])
+
 (def skill-ranks ["unfamiliar"
                   "novice"
                   "learned"
@@ -372,39 +397,57 @@
 (s/def ::flora (s/int-in 0 5))
 (s/def ::depleted? boolean?)
 
-(defn init-location [terrain]
-  (case terrain
-    :plains
-    {:terrain :plains
-     :infra #{}
-     :n 2
-     :k 2
-     :p 2
-     :crop nil
-     :wild? false
-     :ready? nil}
-    :forest
-    {:terrain :forest
-     :infra #{}
-     :flora 1
-     :depleted? false}
-    :mountain
-    {:terrain :mountain
-     :infra #{}}
-    :steppe
-    {:terrain :steppe}
-    :swamp
-    {:terrain :swamp
-     :infra #{}
-     :depleted? false}
-    :jungle
-    {:terrain :jungle
-     :infra #{}}))
+(defn name-location [terrain]
+  (let [prefix (string/join
+                "-"
+                (for [_ (range (inc (rand-int 2)))]
+                  (rand-nth location-names)))]
+    (str prefix " " (string/capitalize (name terrain)))))
+
+(defn init-location
+  ([]
+   (init-location (rand-nth (seq terrains))))
+  ([terrain]
+   (let [name* (name-location terrain)]
+     (case terrain
+       :plains
+       {:name name*
+        :terrain :plains
+        :infra #{}
+        :n 2
+        :k 2
+        :p 2
+        :crop nil
+        :wild? false
+        :ready? false}
+       :forest
+       {:name name*
+        :terrain :forest
+        :infra #{}
+        :flora 1
+        :depleted? false}
+       :mountain
+       {:name name*
+        :terrain :mountain
+        :infra #{}}
+       :steppe
+       {:name name*
+        :terrain :steppe}
+       :swamp
+       {:name name*
+        :terrain :swamp
+        :infra #{}
+        :depleted? false}
+       :jungle
+       {:name name*
+        :terrain :jungle
+        :infra #{}}))))
 
 (s/def ::location
   (s/with-gen
     (s/and
-     (s/keys :req-un [::terrain])
+     (s/keys :req-un [::terrain
+                      ::name])
      (s/or
       :plains (s/keys :req-un [::infra
                                ::n
@@ -445,14 +488,17 @@
 
 (defn gen-herd
   ([]
-   (gen-herd {:hunger 0
-              :sickness 0
-              :month 0}))
-  ([{:keys [hunger sickness month]
-     :or {hunger 0
-          sickness 0
-          month 0}}]
-   (let [herd {:hunger hunger
+   (gen-herd
+    (rand-nth herd-names)
+    {:hunger 0
+     :sickness 0
+     :month 0}))
+  ([name* {:keys [hunger sickness month]
+           :or {hunger 0
+                sickness 0
+                month 0}}]
+   (let [herd {:name name*
+               :hunger hunger
                :sickness sickness
                :month month}
          individuals (gen-individuals herd (+ 40 (rand-int 20)))
@@ -463,10 +509,8 @@
                      (set (take 2 (shuffle (vec skills)))))
              add-syndicate)]
      (gen-herd individuals syndicates herd)))
-  ([individuals syndicates {:keys [hunger sickness month]}]
-   (merge {:hunger (or hunger 0)
-           :sickness (or sickness 0)
-           :month (or month 0)}
+  ([individuals syndicates base-herd]
+   (merge base-herd
           {:individuals individuals
            :syndicates syndicates
            :stores (reduce
