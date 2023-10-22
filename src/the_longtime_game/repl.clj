@@ -1,9 +1,5 @@
 (ns the-longtime-game.repl
-  (:require [clojure.spec.alpha :as s]
-            [clojure.string :as string]
-            [clojure.test.check.generators :as g]
-            [the-longtime-game.event :as event]
-            [the-longtime-game.project :as project]
+  (:require [clojure.string :as string]
             [the-longtime-game.core :as core]))
 
 (defn collect-text
@@ -61,13 +57,14 @@
   [s & {:keys [prefix header footer width raw?]
         :or {header "┌────"
              prefix "│"
-             footer "└────"}}]
-  (string/join "\n" [header
-                     (quote-text s
-                                 :prefix prefix
-                                 :width width
-                                 :raw? raw?)
-                     footer]))
+             footer "└────"
+             width 80
+             raw? false}}]
+  (let [text (quote-text s
+                         :prefix prefix
+                         :width width
+                         :raw? raw?)]
+    (string/join "\n" [header text footer])))
 
 (defn wrap-options
   [header options & {:keys [prefix prefix-h footer]
@@ -141,6 +138,17 @@
       answer
       (select-in-range prompt n))))
 
+(defn await-text
+  [prompt & {:keys [prefix default]
+             :or {prefix "<"}}]
+  (println (quote-text prompt :prefix "!"))
+  (print (str prefix " "))
+  (let [answer (read-line)]
+    (if (seq answer)
+      answer
+      (or default
+          (await-text prompt :prefix prefix)))))
+
 (defn await-confirmation
   ([]
    (await-confirmation "Press enter to proceed."))
@@ -174,12 +182,6 @@
     (println "├─ Population:" population)
     (println "├─ Syndicates:" syndicate-names)
     (println "├─ Location:" (:name (get (first (:path herd)) (:index herd))))
-    (println "├─ Fulfillment (avg):"
-             (as-> (:individuals herd) $
-               (map :fulfillment $)
-               (reduce + $)
-               (/ $ population)
-               (int $)))
     (println "├─ Hunger:" (:hunger herd))
     (println "├─ Sickness:"
              (as-> (:sickness herd) $
@@ -188,6 +190,19 @@
                (float $)
                (format "%.2f" $)
                (str $ "%")))
+    (let [fulfillments (map :fulfillment (:individuals herd))
+          average (as-> fulfillments $
+                    (reduce + 0 $)
+                    (/ $ population))
+          stdev (as-> fulfillments $
+                  (map - $ (repeat average))
+                  (map #(* % %) $)
+                  (reduce + $)
+                  (/ $ (dec population))
+                  (Math/sqrt $))]
+      (println "├┬ Fulfillment")
+      (println "│├─ avg:" (format "%.2f" (float average)))
+      (println "│└─ std:" (format "%.2f" stdev)))
     (println "├┬ Skills")
     (let [skills (sort skill-levels)
           prefixes (match-prefix skills)

@@ -87,6 +87,7 @@
 (def death-modifier 2)
 (def birth-modifier 2)
 (def optimal-pops-per-stage 50)
+(def pop-shift-per-delta 50)
 (def max-hunger 4)
 (def max-infrastructure 4)
 (def max-skill (count skill-ranks))
@@ -610,6 +611,55 @@
   :args (s/cat :herd ::herd
                :individual ::individual)
   :ret (s/and number? #(>= % 0)))
+
+(defn shift-population
+  [{:keys [hunger sickness] :as herd}]
+  (let [population (-> herd :individuals count)
+        stages (-> herd :path count)
+        optimal (int (* optimal-pops-per-stage
+                        stages
+                        (- 1 (/ hunger max-hunger))
+                        (- 1 (/ sickness population))))
+        delta (- optimal population)
+        >0? (> delta 0)
+        n (inc (Math/abs (int (/ delta pop-shift-per-delta))))]
+    (if >0?
+      [(rand-int n) (rand-int 2)]
+      [(rand-int 2) (rand-int n)])))
+
+(s/fdef shift-population
+  :args (s/cat :herd ::herd)
+  :ret (s/tuple nat-int? nat-int?))
+
+(defn calc-pop-changes
+  [herd journeyings deaths]
+  [(vec (for [_ (range journeyings)] (gen-adult herd)))
+   (set (take deaths (shuffle (:individuals herd))))])
+
+(s/fdef calc-pop-changes
+  :args (s/cat :herd ::herd
+               :journeyings nat-int?
+               :deaths nat-int?)
+  :ret (s/tuple ::individuals ::individuals))
+
+(defn apply-pop-changes
+  [herd new-adults new-dead]
+  (cond-> herd
+    (seq new-adults)
+    (update :individuals
+            (comp vec concat) new-adults)
+    (seq new-dead)
+    (update :individuals
+            (fn [individuals]
+              (->> individuals
+                   (remove #(contains? new-dead %))
+                   vec)))))
+
+(s/fdef apply-pop-changes
+  :args (s/cat :herd ::herd
+               :new-adults ::individuals
+               :new-dead ::individuals)
+  :ret ::herd)
 
 (defn has-died?
   [herd individual]
