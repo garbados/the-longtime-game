@@ -96,20 +96,22 @@
       (contains? predicates predicate)
       (apply (-> predicate keyword predicates) args)
       :else
-      nil)))
+      s)))
 
 (defn prompt-text
   [& {:keys [prefix forbidden error]
       :or {prefix "<"
-           forbidden []
+           forbidden #{}
            error "That answer is not allowed."}}]
   (print (str prefix " "))
-  (let [s (read-line)
-        x (handle-read-line s)]
-    (cond
-      (contains? forbidden x)
-      (println (quote-text error))
-      :else x)))
+  (let [answer (handle-read-line (read-line))]
+    (if (contains? forbidden answer)
+      (do
+        (println (quote-text error))
+        (prompt-text :prefix prefix
+                     :forbidden forbidden
+                     :error error))
+      answer)))
 
 (defn select-from-options
   [prompt options & {:keys [may-cancel?]
@@ -121,7 +123,7 @@
   (let [answer (prompt-text)]
     (cond
       (and (int? answer)
-           (< answer (count options)))
+           (< (dec answer) (count options)))
       (nth options (dec answer))
       (and may-cancel?
            (= answer "cancel"))
@@ -275,8 +277,8 @@
   (println "├─ Fulfillment:" (:fulfillment individual))
   (when-let [traits (seq (:traits individual))]
     (println "├─ Traits:" (string/join ", " traits)))
-  (when-let [passions (map name (seq (:passions individual)))]
-    (println "├─ Passions:" (string/join ", " passions)))
+  (when-let [passions (seq (:passions individual))]
+    (println "├─ Passions:" (string/join ", " (map name passions))))
   (println "├┬ Skills")
   (let [skills (->> (:skills individual)
                     (filter
