@@ -196,7 +196,10 @@
          core/skills)]
     (println "┌────")
     (println "├" (:name herd))
-    (println "├─ Month:" (:month herd))
+    (let [month (:month herd)
+          season (-> herd core/get-season
+                     core/int->season)]
+      (println (str "├─ Month: " month " (" season ")")))
     (println "├─ Population:" population)
     (println "├─ Syndicates:" syndicate-names)
     (println "├─ Hunger:" (:hunger herd))
@@ -220,49 +223,55 @@
       (println "├┬ Fulfillment")
       (println "│├─ avg:" (format "%.2f" (float average)))
       (println "│└─ std:" (format "%.2f" stdev)))
-    (let [location (core/current-location herd)]
-      (println "├┬ Location:" (:name (get (first (:path herd)) (:index herd))))
-      (when-let [infra (seq (:infra location))]
-        (println "│├┬ Infrastructure")
-        (let [prefixes (match-prefix infra)
-              infra* (map vector infra prefixes)]
-          (doseq [[i prefix] infra*]
-            (println (str "││" prefix "─ " i)))))
-      (when-let [stores (seq (:stores location))]
-        (println "│├┬ Stored")
-        (let [stores (sort stores)
-              prefixes (match-prefix stores)
-              stores* (map into stores prefixes)]
-          (doseq [[resource amount prefix] stores*
-                  :let [name* (-> resource name string/capitalize)]]
-            (println (str "││" prefix "─ " name* ": " amount)))))
-      (let [strings
-            (filter
-             some?
-             [(when (some? (:flora location))
-                (str "─ Flora: " (:flora location)))
-              (when (some? (:depleted? location))
-                (str "─ Depleted? " (:depleted? location)))
-              (when (= :plains (:terrain location))
-                (str "─ Nutrients: "
-                     (string/join
-                      ", "
-                      (map (fn [nutrient]
-                             (string/join
-                              " "
-                              [(-> nutrient
-                                   name
-                                   string/capitalize)
-                               (get location nutrient)]))
-                           [:n :k :p]))))
-              (when (contains? location :crop)
-                (str "─ Crop: " (:crop location)))
-              (when (some? (:ready? location))
-                (str "─ Ready? " (:ready? location)))
-              (when (some? (:wild? location))
-                (str "─ Wild? " (:wild? location)))])
-            prefixes
-            (match-prefix strings)]
+    (let [location (core/current-location herd)
+          strings
+          (filter
+           some?
+           [(when-let [infra (seq (:infra location))]
+              (string/join
+               "\n"
+               (concat [(str "│├┬ Infrastructure")]
+                       (let [prefixes (match-prefix infra)
+                             infra* (map vector infra prefixes)]
+                         (for [[i prefix] infra*]
+                           (str "││" prefix "─ " i))))))
+            (when-let [stores (seq (:stores location))]
+              (string/join
+               "\n"
+               (concat ["│├┬ Stored"]
+                       (let [stores (sort stores)
+                             prefixes (match-prefix stores)
+                             stores* (map into stores prefixes)]
+                         (for [[resource amount prefix] stores*
+                               :let [name* (-> resource name string/capitalize)]]
+                           (str "││" prefix "─ " name* ": " amount))))))
+            (when (some? (:flora location))
+              (str "─ Flora: " (:flora location)))
+            (when (some? (:depleted? location))
+              (str "─ Depleted? " (:depleted? location)))
+            (when (= :plains (:terrain location))
+              (str "─ Nutrients: "
+                   (string/join
+                    ", "
+                    (map (fn [nutrient]
+                           (string/join
+                            " "
+                            [(-> nutrient
+                                 name
+                                 string/capitalize)
+                             (get location nutrient)]))
+                         [:n :k :p]))))
+            (when (contains? location :crop)
+              (str "─ Crop: " (:crop location)))
+            (when (some? (:ready? location))
+              (str "─ Ready? " (:ready? location)))
+            (when (some? (:wild? location))
+              (str "─ Wild? " (:wild? location)))])
+          prefixes
+          (match-prefix strings)
+          first-prefix (if (seq strings) "┬" "─")]
+      (println (str "├" first-prefix " Location: " (:name location)))
+      (when (seq strings)
         (println
          (string/join
           "\n"
@@ -448,7 +457,6 @@
 
 (defn choose-next-location
   [herd]
-  (println (:path herd))
   (let [next-stage (second (:path herd))
         index
         (if (= 1 (count next-stage))
@@ -463,6 +471,11 @@
 (defn decide-carrying
   [herd]
   (let [remaining (core/carry-limit herd)
+        _ (println
+           (wrap-options
+            (str "The herd has too many goods to carry (" remaining ")")
+            (for [[resource amount] (seq (:stores herd))]
+              (str (name resource) ": " amount))))
         [_ carrying]
         (reduce
          (fn [[remaining carrying] resource]
@@ -483,7 +496,7 @@
      (wrap-options
       "The herd will carry with it:"
       (for [[resource amount] (seq carrying)]
-        (str resource ": " amount))))
+        (str (name resource) ": " amount))))
     (if (select-from-options "OK?" [true false])
       (core/keep-and-leave-behind herd carrying)
       (decide-carrying herd))))
@@ -497,7 +510,7 @@
         (if (core/local-infra? herd :granary)
           (update-in location [:stores :food] + leftovers)
           location)
-        herd (assoc-in herd [:path (:index herd)] location)]
+        herd (core/assoc-location herd location)]
     (if (core/must-leave-some? herd)
       (decide-carrying herd)
       herd)))
@@ -506,7 +519,8 @@
   [herd]
   (if (= :steppe (:terrain (core/current-location herd)))
     (choose-next-location herd)
-    (let [{:keys [new-adults new-dead] :as info} (marshal-info herd)
+    (let [herd (core/consolidate-stores herd)
+          {:keys [new-adults new-dead] :as info} (marshal-info herd)
           ;; TODO announce with println
           herd (core/apply-pop-changes herd new-adults new-dead)
           ;; [info herd] (cause-event info herd)

@@ -120,6 +120,12 @@
    :medicine   "med"
    :organizing "org"})
 
+(def int->season
+  {0 "spring"
+   1 "summer"
+   2 "fall"
+   3 "winter"})
+
 (def first-syllable
   ["Il" "Ol" "Ib" "Ak"
    "Li" "El" "Et" "Uk"
@@ -578,6 +584,15 @@
   :args (s/cat :herd ::herd)
   :ret ::location)
 
+(defn assoc-location
+  [herd location]
+  (assoc-in herd [:path 0 (:index herd)] location))
+
+(s/fdef assoc-location
+  :args (s/cat :herd ::herd
+               :location ::location)
+  :ret ::herd)
+
 (defn shift-population
   [{:keys [hunger sickness] :as herd}]
   (let [population (-> herd :individuals count)
@@ -732,20 +747,6 @@
                    (s/gen ::herd)))
   :ret ::herd)
 
-(defn consolidate-stores
-  [herd]
-  (let [location (current-location herd)
-        stores (merge-with +
-                           (:stores herd)
-                           (:stores location))]
-    (-> herd
-        (update :stores stores)
-        (update-in [:path (:index herd) :stores] {}))))
-
-(s/fdef consolidate-stores
-  :args (s/cat :herd ::herd)
-  :ret ::herd)
-
 (defn apply-herd-upkeep
   [{:keys [individuals stores] :as herd}]
   (let [{:keys [food rations poultices]} stores
@@ -816,8 +817,8 @@
   (let [nutrients (crop->nutrients crop)]
     [nutrients
      (if (= 2 (count nutrients))
-       2
-       3)]))
+       1
+       2)]))
 
 (s/fdef crop-info
   :args (s/cat :crop crops)
@@ -831,7 +832,7 @@
      (-> location
          (update nutrient - amount)
          (update nutrient max 0)
-         (update nutrient min 3)))
+         (update nutrient min 2)))
    location
    nutrients))
 
@@ -871,8 +872,12 @@
       (and (some? (:crop location))
            (false? (:ready? location))
            (false? (:wild? location)))
-      (assoc location
-             :ready? true)
+      (let [nutrients* (crop->nutrients (:crop location))
+            unused-nutrients (filter (complement nutrients*) nutrients)]
+        ;; unused nutrients regrow
+        (as-> location $
+          (update-nutrients unused-nutrients -1 $)         
+          (assoc $ :ready? true)))
       ;; crop goes wild
       (and (true? (:ready? location))
            (false? (:wild? location)))
@@ -1008,4 +1013,18 @@
                :individual ::individual
                :f ifn?
                :rest (s/* any?))
+  :ret ::herd)
+
+(defn consolidate-stores
+  [herd]
+  (let [location (current-location herd)
+        stores (merge-with +
+                           (:stores herd)
+                           (:stores location {}))]
+    (-> herd
+        (assoc :stores stores)
+        (assoc-location (assoc location :stores {})))))
+
+(s/fdef consolidate-stores
+  :args (s/cat :herd ::herd)
   :ret ::herd)

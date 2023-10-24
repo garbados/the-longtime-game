@@ -26,11 +26,12 @@
          :uses [:herbalism]
          :filter (cond-> {:terrain :plains
                           :season 0}
-                   (= 3 amount)
+                   (= 1 (count nutrients))
                    (merge {:skills {:herbalism 100}}))
          :filter-fn
          (fn [_ location]
-           (every? true? (map #(>= (get location %) amount) nutrients)))
+           (and (nil? (:crop location))
+                (every? true? (map #(>= (get location %) amount) nutrients))))
          :location-effect
          (fn [location]
            (-> (core/update-nutrients nutrients amount location)
@@ -144,8 +145,8 @@
        (true? (:ready? location)))
      :effect
      (fn [herd skill-amount]
-       (let [amount
-             (* 100 (+ 1 (/ skill-amount 100)))]
+       (let [modifier (skill->multiplier skill-amount)
+             amount (int (* 100 modifier))]
          (update-in herd [:stores :food] + amount)))
      :location-effect
      #(assoc %
