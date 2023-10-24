@@ -6,7 +6,7 @@
 
 (def events
   [{:name "Plague"
-    :select {}
+    :select [{}]
     :marshal-fn
     (fn [_ herd]
       (and (<= 50 (get-in herd [:stores :poultices] 0))
@@ -92,22 +92,22 @@
    {:name "Joy"}
    {:name "Growth"}])
 
-(s/def ::births (s/coll-of ::core/individual))
-(s/def ::deaths (s/coll-of ::core/individual))
+(s/def ::new-adults (s/coll-of ::core/individual))
+(s/def ::new-dead (s/coll-of ::core/individual))
 (s/def ::event (s/nilable string?))
 (s/def ::projects (s/coll-of string?))
 (s/def ::dreams (s/coll-of string?))
 (s/def ::info
-  (s/keys :req-un [::births
-                   ::deaths
+  (s/keys :req-un [::new-adults
+                   ::new-dead
                    ::event
                    ::projects
                    ::dreams]))
 
 (defn fresh-info
   []
-  {:births []
-   :deaths []
+  {:new-adults []
+   :new-dead []
    :event nil
    :projects []
    :dreams []})
@@ -229,13 +229,14 @@
                :character-select ::character)
   :ret (s/nilable ::core/individual))
 
-(defn get-cast [herd event]
-  (for [character-select (:select event)]
+(defn get-cast [herd event-or-dream]
+  (for [character-select (:select event-or-dream)]
     (find-character herd character-select)))
 
 (s/fdef get-cast
   :args (s/cat :herd ::core/herd
-               :event ::event)
+               :event-or-dream
+               (s/keys :req-un [::select]))
   :ret (s/coll-of (s/nilable ::core/individual)))
 
 (defn can-event-trigger?

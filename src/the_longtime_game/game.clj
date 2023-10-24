@@ -3,12 +3,13 @@
             [clojure.java.io :as io]
             [clojure.spec.alpha :as s]
             [the-longtime-game.core :as core]
+            [the-longtime-game.project :as project]
             [the-longtime-game.event :as event]
             [the-longtime-game.repl :as repl]))
 
+(s/def ::spirit ::core/name)
 (s/def ::game (s/keys :req-un [::core/herd
-                               ::event/info
-                               ::core/name]))
+                               ::spirit]))
 
 (defn save-path
   [path]
@@ -23,10 +24,13 @@
   (edn/read-string (slurp (save-path path))))
 
 (defn new-game
-  []
+  [& {:keys [forbidden]
+      :or {forbidden #{}}}]
   (println (repl/wrap-quote-text
-            "Are you there, some enduring era of peace and plenty?
-             Hard winters and bare summers have weakened our ways
+            "Are you there, some enduring era
+             of peace and plenty?
+             Hard winters and bare summers
+             have weakened our ways
              and scattered our herd.
              Only a few dozen of us remain now to walk
              the ancient path.
@@ -41,11 +45,11 @@
              tell me your name."
             :width 50))
   (let [spirit (repl/await-text "What shall the herd call you?"
+                                :forbidden forbidden
                                 :default "Longtime")
         herd (core/gen-herd)
-        game {:info (event/fresh-info)
-              :herd herd
-              :name spirit}]
+        game {:herd herd
+              :spirit spirit}]
     (println
      (repl/wrap-quote-text
       (str
@@ -66,7 +70,7 @@
                 "Select a game to load"
                 (cons new-game-s saves))]
     (if (= spirit new-game-s)
-      (new-game)
+      (new-game :forbidden (set saves))
       (load-game spirit))))
 
 (defn launch-game
@@ -84,3 +88,18 @@
     (if (seq saves)
       (prompt-for-game saves)
       (new-game))))
+
+(defn game-loop
+  [{:keys [herd spirit] :as game}]
+  (reduce
+   (fn [herd _]
+     (let [herd* (repl/do-month herd)
+           game* (assoc game :herd herd*)]
+       (save-game game* spirit)
+       herd*))
+   herd
+   (range)))
+
+(defn main
+  []
+  (game-loop (launch-game)))

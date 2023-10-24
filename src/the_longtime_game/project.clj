@@ -3,6 +3,20 @@
             [the-longtime-game.core :as core]
             [clojure.test.check.generators :as g]))
 
+(defn skill->multiplier
+  [skill-amount]
+  (+ 1 (/ skill-amount 100)))
+
+(defn production-project
+  [uses resource product x n]
+  {:uses uses
+   :filter {:stores (assoc {} resource x)}
+   :effect
+   (fn [herd skill-amount]
+     (let [modifier (skill->multiplier skill-amount)
+           amount (int (* x n modifier))]
+       (update-in herd [:stores product] + amount)))})
+
 (def projects
   (concat
    (map
@@ -11,7 +25,7 @@
         {:name (str "Plant " (name crop))
          :uses [:herbalism]
          :filter (cond-> {:terrain :plains
-                          :season 1}
+                          :season 0}
                    (= 3 amount)
                    (merge {:skills {:herbalism 100}}))
          :filter-fn
@@ -42,73 +56,75 @@
                terrain (assoc :terrain terrain))
              :filter-fn
              (fn [_ location]
-               (> core/max-infrastructure (count (:infra location))))
+               (> core/max-buildings (count (:infra location))))
              :location-effect
              (fn [location]
                (update location :infra conj infra))}))
         [[:granary
           :herbalism
-          100
+          10
           {:wood 10 :stone 10 :tools 10}]
          [:stadium
           :athletics
-          100
+          20
           {:wood 20 :tools 5}]
          [:observatory
           :organizing
-          100
+          50
           {:wood 10 :stone 10 :tools 10}]
          [:quarry
           :geology
-          100
+          50
           {:wood 10 :stone 50 :tools 20}]
          [:kitchen
           :medicine
-          100
+          20
           {:wood 10 :stone 10 :tools 10}]
          [:workshop
           :craftwork
-          100
+          20
           {:wood 10 :stone 10 :tools 10}]
          [:wind-forge
           :craftwork
-          500
+          50
           {:wood 100 :stone 100 :tools 100}
           :jungle]
          [:temple
           :organizing
-          500
+          100
           {:wood 100 :stone 100 :tools 100}]
          [:hospital
           :medicine
-          100
+          50
           {:wood 10 :stone 10 :tools 10}]])
    (map
     (fn [[i material]]
       {:name (str "Manufacture " (name material) " tools")
        :uses [:craftwork]
-       :filter (assoc {} material 50)
+       :filter {:stores (assoc {} material 50)}
        :effect
        (fn [herd skill-amount]
          (let [workshop? (core/local-infra? herd :workshop)
-               amount (-> (if workshop?
-                            skill-amount
-                            (/ skill-amount 2))
-                          (* i)
-                          int)]
+               amount
+               (int
+                (* 50
+                   i
+                   (skill->multiplier skill-amount)
+                   (if workshop? 2 1)))]
            (update-in herd [:stores :tools] + amount)))})
     [[1 :stone]
      [2 :bone]
      [4 :metal]])
    [{:name "Explore"
-     :uses []
+     :uses [:organizing]
+     :filter {:skills {:organizing 20}}
      :effect
      (fn [herd _]
        (let [location (-> core/terrains vec rand-nth core/init-location)]
-         (update-in herd [:path 1] concat [location])))}
+         (update-in herd [:path 1] conj location)))}
     {:name "Elongate path"
      :uses []
-     :filter {:skills {:organizing 500}}
+     :filter {:skills {:organizing 100}}
      :effect
      (fn [herd _]
        (let [options (vec core/terrains)
@@ -116,9 +132,10 @@
                         (-> options rand-nth core/init-location)]]
          (update herd :path
                  (fn [path]
-                   (concat (subvec path 0 2)
-                           locations
-                           (subvec path 2))))))}
+                   (vec
+                    (concat (subvec path 0 2)
+                            locations
+                            (subvec path 2)))))))}
     {:name "Harvest crops"
      :uses [:herbalism]
      :filter {:terrain :plains}
@@ -127,7 +144,9 @@
        (true? (:ready? location)))
      :effect
      (fn [herd skill-amount]
-       (update-in herd [:stores :food] + skill-amount))
+       (let [amount
+             (* 100 (+ 1 (/ skill-amount 100)))]
+         (update-in herd [:stores :food] + amount)))
      :location-effect
      #(assoc %
              :crop nil
@@ -143,8 +162,10 @@
        :effect
        (fn [herd skill-amount]
          (let [stadium? (core/local-infra? herd :stadium)
-               modifier (if stadium? 25 50)
-               amount (int (/ skill-amount modifier))
+               modifier (skill->multiplier skill-amount)
+               amount (int (* 3
+                              modifier
+                              (if stadium? 2 1)))
                remaining-food (- (get-in herd [:stores :food] 0) need)
                remaining-rations
                (if (< remaining-food 0)
@@ -155,7 +176,7 @@
                (update :individuals
                        (partial map #(core/inc-fulfillment % amount)))
                (assoc-in [:stores :food] (max 0 remaining-food))
-               (assoc-in [:stores :rations] (max 0 remaining-rations)))))})
+               (assoc-in [:stores :rations] remaining-rations))))})
     {:name "Gather deadfall"
      :uses [:herbalism]
      :filter {:terrain :forest}
@@ -167,9 +188,10 @@
        (assoc location :depleted? true))
      :effect
      (fn [herd skill-amount]
-       (let [flora (get-in herd [:path 0 (:index herd) :flora])
-             wood (int (* flora skill-amount 1/2))
-             bone (int (* flora skill-amount 1/4))]
+       (let [amount (* 50 (skill->multiplier skill-amount))
+             flora (get-in herd [:path 0 (:index herd) :flora])
+             wood (int (* flora amount))
+             bone (int (* flora amount 1/2))]
          (-> herd
              (update-in [:stores :wood] + wood)
              (update-in [:stores :bone] + bone))))}
@@ -188,7 +210,7 @@
      :effect
      (fn [herd skill-amount]
        (let [flora (get-in herd [:path 0 (:index herd) :flora])
-             amount (* flora skill-amount 1/2)]
+             amount (* 50 flora (skill->multiplier skill-amount))]
          (update-in herd [:stores :food] + amount)))}
     {:name "Venerate the land"
      :uses [:herbalism]
@@ -197,41 +219,47 @@
      :location-effect
      (fn [location]
        (update location :flora inc))}
-    {:name "Smelt metal"
-     :uses [:craftwork]
-     :filter {:stores {:ore 100}
-              :season 2}
-     :filter-fn
-     (fn [herd _]
-       (core/local-infra? herd :wind-forge))
-     :effect
-     (fn [herd skill-amount]
-       (update-in herd [:stores :metal] + skill-amount))}
-    {:name "Produce poultices"
-     :uses [:medicine]
-     :filter {:stores {:food 50}}
-     :effect
-     (fn [herd skill-amount]
-       (update-in herd [:stores :poultices] + skill-amount))}
-    {:name "Produce rations"
-     :uses [:medicine]
-     :filter {:stores {:food 50}}
-     :effect
-     (fn [herd skill-amount]
-       (update-in herd [:stores :rations] + skill-amount))}
+    (-> (production-project [:craftwork]
+                            :ore
+                            :metal
+                            100
+                            1/2)
+        (assoc-in [:filter :season] 2)
+        (assoc :name "Smelt metal"
+               :filter-fn
+               (fn [herd _]
+                 (core/local-infra? herd :wind-forge))))
+    (-> (production-project [:medicine]
+                            :food
+                            :poultices
+                            50
+                            1/2)
+        (assoc :name "Prepare poultices"))
+    (-> (production-project [:medicine]
+                            :food
+                            :rations
+                            50
+                            1)
+        (assoc :name "Cook Rations"))
     {:name "Gather stones"
      :uses [:geology]
      :effect
      (fn [herd skill-amount]
-       (-> herd
-           (update-in [:stores :stone] + (* skill-amount 3/4))
-           (update-in [:stores :ore] + (* skill-amount 1/4))))}
+       (let [modifier (skill->multiplier skill-amount)
+             amount (* 50 modifier)
+             stone (int (* amount 3/4))
+             ore (int (* amount 1/4))]
+         (-> herd
+             (update-in [:stores :stone] + stone)
+             (update-in [:stores :ore] + ore))))}
     {:name "Gather bog-iron"
      :uses [:geology]
      :filter {:terrain :swamp}
      :effect
      (fn [herd skill-amount]
-       (update-in herd [:stores :ore] + skill-amount))
+       (let [modifier (skill->multiplier skill-amount)
+             amount (int (* 50 modifier))]
+         (update-in herd [:stores :ore] + amount)))
      :location-effect
      (fn [location]
        (assoc location :depleted? true))}
@@ -241,17 +269,28 @@
               :stores {:tools 10}}
      :effect
      (fn [herd skill-amount]
-       (update-in herd [:stores :ore] + skill-amount))}
+       (let [modifier (skill->multiplier skill-amount)
+             amount (int (* 50 modifier))]
+         (update-in herd [:stores :ore] + amount)))}
     {:name "Stargaze"
      :uses [:organizing]
      :filter {:terrain :mountain}
      :effect
      (fn [herd skill-amount]
        (let [observatory? (core/local-infra? herd :observatory)
-             modifier (if observatory? 25 50)
-             amount (int (/ skill-amount modifier))]
+             modifier (skill->multiplier skill-amount)
+             amount (int (* 3
+                            modifier
+                            (if observatory? 2 1)))]
          (update herd :individuals
-                 (partial map #(core/inc-fulfillment % amount)))))}]))
+                 (partial map #(core/inc-fulfillment % amount)))))}
+    {:name "Graze"
+     :uses [:herbalism]
+     :effect
+     (fn [herd skill-amount]
+       (let [modifier (skill->multiplier skill-amount)
+             amount (int (* 50 modifier))]
+         (update-in herd [:stores :food] + amount)))}]))
 
 (s/def ::skills (s/map-of ::core/skill pos-int?))
 (s/def ::filter
@@ -333,7 +372,7 @@
            true)
          (reduce
           (fn [ok? [resource required]]
-            (let [amount (get-in herd [:stores resource])]
+            (let [amount (get-in herd [:stores resource] 0)]
               (and ok?
                    (>= amount required))))
           true
@@ -372,7 +411,7 @@
                           stores-filter)
                         identity)
         location* (cond-> location
-                    location-effect (location-effect location))]
+                    location-effect location-effect)]
     (-> (cond-> herd
           effect (effect skill))
         (assoc-in [:path 0 (:index herd)] location*)

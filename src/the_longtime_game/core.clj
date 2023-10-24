@@ -13,6 +13,8 @@
                  :metal
                  :tools})
 
+(def carryable (disj resources :food))
+
 (def skills #{:athletics
               :craftwork
               :geology
@@ -84,12 +86,10 @@
 
 (def max-age 50)
 (def adulthood 20)
-(def death-modifier 2)
-(def birth-modifier 2)
-(def optimal-pops-per-stage 50)
+(def optimal-pops-per-stage 125)
 (def pop-shift-per-delta 50)
 (def max-hunger 4)
-(def max-infrastructure 4)
+(def max-buildings 4)
 (def max-skill (count skill-ranks))
 (def max-fulfillment 100)
 (def max-passions 3)
@@ -97,7 +97,7 @@
 (def passion-rate 10)
 (def fulfillment-rate 10)
 (def fulfillment-decay 1)
-(def carry-modifier 5)
+(def carry-modifier 3)
 (def organization-threshold 100)
 (def organization-multiplier 10)
 
@@ -130,15 +130,15 @@
    "Na" "Mi" "Si" "Pa"
    "Zo" "Ze" "Ki" "Gi"])
 
-(def infrastructure #{:granary
-                      :stadium
-                      :observatory
-                      :quarry
-                      :kitchen
-                      :workshop
-                      :wind-forge
-                      :temple
-                      :hospital})
+(def buildings #{:granary
+                 :stadium
+                 :observatory
+                 :quarry
+                 :kitchen
+                 :workshop
+                 :wind-forge
+                 :temple
+                 :hospital})
 
 (defn gen-name []
   (string/join "-" [(rand-nth first-syllable)
@@ -221,7 +221,7 @@
   [born]
   {:name (gen-name)
    :born born
-   :fulfillment 50
+   :fulfillment (+ 40 (rand-int 21))
    :traits #{}
    :passions #{}
    :skills (reduce
@@ -386,8 +386,8 @@
   :ret (s/keys :req-un [::syndicates]))
 
 (s/def ::terrain terrains)
-(s/def ::infrastructure infrastructure)
-(s/def ::infra (s/coll-of ::infrastructure :kind set?))
+(s/def ::building buildings)
+(s/def ::infra (s/coll-of ::building :kind set?))
 (s/def ::nutrient (s/int-in 0 4))
 (s/def ::n ::nutrient)
 (s/def ::k ::nutrient)
@@ -578,40 +578,6 @@
   :args (s/cat :herd ::herd)
   :ret ::location)
 
-(defn birth-chance
-  [{:keys [hunger sickness individuals path]}]
-  (let [stages (count path)
-        population (count individuals)
-        optimal (* optimal-pops-per-stage
-                   stages
-                   (- 1 (/ hunger max-hunger))
-                   (- 1 (/ sickness population)))
-        births (-> (- optimal population)
-                   (/ (max optimal 1))
-                   (+ 1)
-                   (* birth-modifier)
-                   (max 2)
-                   (min 100)
-                   int
-                   rand-int)]
-    births))
-
-(s/fdef birth-chance
-  :args (s/cat :herd ::herd)
-  :ret nat-int?)
-
-(defn death-chance
-  [{:keys [hunger sickness individuals] :as herd} individual]
-  (let [age (get-age herd individual)]
-    (* (/ age max-age)
-       (+ 1 (/ hunger max-hunger))
-       (+ 1 (/ sickness (count individuals))))))
-
-(s/fdef death-chance
-  :args (s/cat :herd ::herd
-               :individual ::individual)
-  :ret (s/and number? #(>= % 0)))
-
 (defn shift-population
   [{:keys [hunger sickness] :as herd}]
   (let [population (-> herd :individuals count)
@@ -621,9 +587,8 @@
                         (- 1 (/ hunger max-hunger))
                         (- 1 (/ sickness population))))
         delta (- optimal population)
-        >0? (> delta 0)
         n (inc (Math/abs (int (/ delta pop-shift-per-delta))))]
-    (if >0?
+    (if (> delta 0)
       [(rand-int n) (rand-int 2)]
       [(rand-int 2) (rand-int n)])))
 
@@ -661,26 +626,13 @@
                :new-dead ::individuals)
   :ret ::herd)
 
-(defn has-died?
-  [herd individual]
-  (let [chance (death-chance herd individual)
-        rolled (* chance (rand-int max-age))
-        threshold (* death-modifier max-age)
-        passed? (> rolled threshold)]
-    passed?))
-
-(s/fdef has-died?
-  :args (s/cat :herd ::herd
-               :individual ::individual)
-  :ret boolean?)
-
 (defn local-infra? [herd infra]
   (let [location (current-location herd)]
     (contains? (:infra location) infra)))
 
 (s/fdef local-infra?
   :args (s/cat :herd ::herd
-               :infra infrastructure)
+               :infra buildings)
   :ret boolean?)
 
 (s/def ::season (s/int-in 0 4))
@@ -745,13 +697,17 @@
   :args (s/cat :herd ::herd)
   :ret nat-int?)
 
+(defn must-leave-some?
+  [herd]
+  (let [total (->> carryable
+                   (map #(get-in herd [:stores %] 0))
+                   (reduce + 0))
+        limit (carry-limit herd)]
+    (< limit total)))
+
 (defn keep-and-leave-behind
   [herd carrying]
-  (let [carrying
-        (cond-> carrying
-          (not (local-infra? herd :granary))
-          (assoc :food 0))
-        leaving
+  (let [leaving
         (reduce
          (fn [all [resource amount]]
            (let [stored (get-in herd [:stores resource] 0)]
@@ -776,33 +732,38 @@
                    (s/gen ::herd)))
   :ret ::herd)
 
-(defn aggregate-store
+(defn consolidate-stores
   [herd]
-  (let [location (current-location herd)]
-    (merge-with +
-                (:stores herd)
-                (:stores location))))
+  (let [location (current-location herd)
+        stores (merge-with +
+                           (:stores herd)
+                           (:stores location))]
+    (-> herd
+        (update :stores stores)
+        (update-in [:path (:index herd) :stores] {}))))
 
-(s/fdef aggregate-store
+(s/fdef consolidate-stores
   :args (s/cat :herd ::herd)
-  :ret ::stores)
+  :ret ::herd)
 
 (defn apply-herd-upkeep
   [{:keys [individuals stores] :as herd}]
   (let [{:keys [food rations poultices]} stores
-        need (count individuals)
-        food-deficit (max 0 (- need food))
+        population (count individuals)
+        food-need (int (* 1/2 population))
+        food-deficit (max 0 (- food-need food))
         rations-deficit (- rations food-deficit)
         hunger? (and (> food-deficit 0) (> 0 rations-deficit))
-        poultice-deficit (max 0 (- need poultices))
-        sickness? (> 0 poultice-deficit)]
+        poultice-need (int (* 1/4 population))
+        poultice-deficit (max 0 (- poultice-need poultices))
+        sickness? (< 0 poultice-deficit)]
     (-> herd
         (assoc-in [:stores :food]
-                  (max 0 (- food need)))
+                  (max 0 (- food food-need)))
         (assoc-in [:stores :rations]
                   (max 0 (- rations food-deficit)))
         (assoc-in [:stores :poultices]
-                  (max 0 (- poultices need)))
+                  (max 0 (- poultices poultice-need)))
         (assoc :individuals
                (map #(update % :fulfillment - fulfillment-decay)
                     individuals))
@@ -841,8 +802,8 @@
   [{:keys [path] :as herd} index]
   (assoc herd
          :index index
-         :path (vec (conj (rest path)
-                          (first path)))))
+         :path (vec (concat (rest path)
+                            [(first path)]))))
 
 (s/fdef next-location
   :args (s/cat :herd (s/keys :req-un [::path
@@ -958,18 +919,22 @@
 
 (defn inc-month [herd]
   (let [old-season (get-season herd)
-        herd* (update herd :month inc)
+        herd* 
+        (-> herd
+            (update :month inc)
+            (update :individuals
+                    (partial map (partial age-individual herd))))
         new-season (get-season herd*)]
     (if (not= new-season old-season)
       (case new-season
         ;; spring
-        0 (map-locations enter-spring herd)
+        0 (map-locations enter-spring herd*)
         ;; summer
-        1 (map-locations enter-summer herd)
+        1 (map-locations enter-summer herd*)
         ;; fall
-        2 (map-locations enter-fall herd)
+        2 (map-locations enter-fall herd*)
         ;; winter
-        3 (map-locations enter-winter herd))
+        3 (map-locations enter-winter herd*))
       herd*)))
 
 (s/fdef inc-month
@@ -1026,20 +991,6 @@
   :args (s/cat :uses ::uses
                :individual ::individual)
   :ret ::individual)
-
-(defn pre-location [herd]
-  (inc-month herd))
-
-(s/fdef pre-location
-  :args (s/cat :herd ::herd)
-  :ret ::herd)
-
-(defn post-location [herd]
-  (apply-herd-upkeep herd))
-
-(s/fdef post-location
-  :args (s/cat :herd ::herd)
-  :ret ::herd)
 
 (defn update-individual
   [herd individual f & args]
