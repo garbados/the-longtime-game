@@ -1,7 +1,7 @@
 (ns the-longtime-game.project
   (:require [clojure.spec.alpha :as s]
             [the-longtime-game.core :as core]
-            [clojure.test.check.generators :as g]))
+            [clojure.spec.gen.alpha :as g]))
 
 (defn skill->multiplier
   [skill-amount]
@@ -108,7 +108,7 @@
          (let [workshop? (core/local-infra? herd :workshop)
                amount
                (int
-                (* 50
+                (* 10
                    i
                    (skill->multiplier skill-amount)
                    (if workshop? 2 1)))]

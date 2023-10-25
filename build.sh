@@ -1,0 +1,1 @@
+lein clean && lein uberjar

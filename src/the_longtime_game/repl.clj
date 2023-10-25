@@ -1,8 +1,12 @@
 (ns the-longtime-game.repl
   (:require [clojure.string :as string]
             [the-longtime-game.core :as core]
+            [the-longtime-game.event :as event]
+            [the-longtime-game.moment :refer [gen-moments]]
             [the-longtime-game.project :as project]
-            [the-longtime-game.event :as event]))
+            [the-longtime-game.remark :refer [gen-remarks]]))
+
+(def default-width 50)
 
 (defn collect-text
   [s]
@@ -17,7 +21,7 @@
 
 (defn wrap-text
   ([s]
-   (wrap-text s 80))
+   (wrap-text s default-width))
   ([s width]
    (map
     #(string/join " " %)
@@ -40,7 +44,7 @@
 (defn quote-text
   [s & {:keys [prefix width raw?]
         :or {prefix ">"
-             width 80
+             width default-width
              raw? false}}]
   (let [width* (- width (count prefix))
         sections (map
@@ -60,7 +64,7 @@
         :or {header "┌────"
              prefix "│"
              footer "└────"
-             width 80
+             width default-width
              raw? false}}]
   (let [text (quote-text s
                          :prefix prefix
@@ -82,8 +86,14 @@
                 [footer])]
     (string/join "\n" lines)))
 
+(defn exit-game [& _] (System/exit 0))
+
+(def read-line-predicates
+  {"exit" exit-game
+   "quit" exit-game})
+
 (defn handle-read-line
-  [s & [predicates {}]]
+  [s]
   (let [words (string/split s #" ")
         predicate (-> words
                       first
@@ -95,24 +105,21 @@
         args (rest words)]
     (cond
       int-choice int-choice
-      (contains? predicates predicate)
-      (apply (-> predicate keyword predicates) args)
+      (contains? read-line-predicates predicate)
+      (apply (read-line-predicates predicate) args)
       :else
       s)))
 
 (defn prompt-text
   [& {:keys [prefix forbidden error]
-      :or {prefix "<"
+      :or {prefix "!"
            forbidden #{}
            error "That answer is not allowed."}}]
-  (print (str prefix " "))
   (let [answer (handle-read-line (read-line))]
-    (print "\n")
     (if (contains? forbidden answer)
       (do
-        (println (quote-text error))
-        (prompt-text :prefix prefix
-                     :forbidden forbidden
+        (println (quote-text error :prefix prefix))
+        (prompt-text :forbidden forbidden
                      :error error))
       answer)))
 
@@ -172,7 +179,7 @@
    (await-confirmation "Press enter to proceed."))
   ([prompt]
    (println (quote-text prompt :prefix "!"))
-   (read-line)))
+   (handle-read-line (read-line))))
 
 (defn match-prefix
   [l]
@@ -261,8 +268,8 @@
                                  string/capitalize)
                              (get location nutrient)]))
                          [:n :k :p]))))
-            (when (contains? location :crop)
-              (str "─ Crop: " (:crop location)))
+            (when (some? (:crop location))
+              (str "─ Crop: " (name (:crop location))))
             (when (some? (:ready? location))
               (str "─ Ready? " (:ready? location)))
             (when (some? (:wild? location))
@@ -306,48 +313,6 @@
       (doseq [[name* prefix] locations*]
         (println (str "│" prefix "─ " name*))))
     (println "└────")))
-
-(defn print-location
-  [location]
-  (println "┌────")
-  (println "├" (:name location))
-  (when-let [infra (seq (:infra location))]
-    (println "├┬ Infrastructure")
-    (let [prefixes (match-prefix infra)
-          infra* (map vector infra prefixes)]
-      (doseq [[i prefix] infra*]
-        (println (str "│" prefix "─ " i)))))
-  (when-let [stores (seq (:stores location))]
-    (println "├┬ Stored")
-    (let [stores (sort stores)
-          prefixes (match-prefix stores)
-          stores* (map into stores prefixes)]
-      (doseq [[resource amount prefix] stores*
-              :let [name* (-> resource name string/capitalize)]]
-        (println (str "│" prefix "─ " name* ": " amount)))))
-  (when (some? (:flora location))
-    (println "├─ Flora:" (:flora location)))
-  (when (some? (:depleted? location))
-    (println "├─ Depleted?" (:depleted? location)))
-  (when (= :plains (:terrain location))
-    (println "├─ Nutrients:"
-             (string/join
-              ", "
-              (map (fn [nutrient]
-                     (string/join
-                      " "
-                      [(-> nutrient
-                           name
-                           string/capitalize)
-                       (get location nutrient)]))
-                   [:n :k :p]))))
-  (when (contains? location :crop)
-    (println "├─ Crop:" (:crop location)))
-  (when (some? (:ready? location))
-    (println "├─ Ready?" (:ready? location)))
-  (when (some? (:wild? location))
-    (println "├─ Wild?" (:wild? location)))
-  (println "└────"))
 
 (defn print-individual
   [herd individual]
@@ -395,14 +360,6 @@
         info (assoc info :event name)]
     (println (wrap-quote-text blurb))
     (effect info herd cast args)))
-
-#_(defn introduce-location
-  [herd]
-  (println
-   (wrap-quote-text
-    (string/join " " [(event/get-remark herd)
-                      (event/gen-moment herd)
-                      (event/gen-moment herd)]))))
 
 (defn select-project
   [info herd]
@@ -515,8 +472,62 @@
       (decide-carrying herd)
       herd)))
 
+(defn introduce-location
+  [herd]
+  (let [location (core/current-location herd)
+        steppe? (= :steppe (:terrain location))
+        remarks (if steppe?
+                  (gen-remarks herd)
+                  (string/join " " [(gen-remarks herd)
+                                    (gen-moments herd)]))]
+    (println (quote-text (str "The herd arrives at " (:name location) ".")))
+    (println (wrap-quote-text remarks))
+    (when steppe?
+      (println (quote-text "The herd rushes unfettered across the steppe.")))
+    (await-confirmation)))
+
+(def syndicate-remarks
+  {:athletics
+   []
+   :craftwork
+   []
+   :geology
+   []
+   :herbalism
+   []
+   :medicine
+   []
+   :organizing
+   []})
+
+(defn maybe-add-syndicate
+  [herd]
+  (if (core/should-add-syndicate? herd)
+    (let [votes (core/tally-votes (:individuals herd))
+          candidates (core/rank-candidates votes)]
+      (if-let [candidate (core/select-candidate (:syndicates herd) candidates)]
+        (let [remarks (map syndicate-remarks candidate)
+              [r1 r2] (map rand-nth remarks)]
+          (println
+           (wrap-quote-text
+            (string/join
+             " "
+             ["Record-keepers and rhetoricians rejoice!"
+              "Enthusiasts have joined together in debate and duel."
+              "They bicker and bother, sussing with susurrus"
+              "the finer points of some greater ethos."
+              (str "Through " r1 " and " r2 ", ")
+              "a potent consensus emerges,"
+              "a bright and capable vision!"
+              (str "So is founded " (core/syndicate-name candidate) "!")])))
+          (await-confirmation)
+          (update herd :syndicates conj candidate))
+        herd))
+    herd))
+
 (defn do-month
   [herd]
+  (introduce-location herd)
   (if (= :steppe (:terrain (core/current-location herd)))
     (choose-next-location herd)
     (let [herd (core/consolidate-stores herd)
@@ -526,8 +537,10 @@
           ;; [info herd] (cause-event info herd)
           [info herd] (select-month-projects info herd)
           ;; herd (answer-prayer info herd)
+          herd (maybe-add-syndicate herd)
           herd (core/apply-herd-upkeep herd)
           herd (leave-behind herd)
           herd (choose-next-location herd)
           herd (core/inc-month herd)]
+      (print-herd herd)
       herd)))

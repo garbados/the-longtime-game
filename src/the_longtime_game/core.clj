@@ -1,7 +1,7 @@
 (ns the-longtime-game.core
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as string]
-            [clojure.test.check.generators :as g]))
+            [clojure.spec.gen.alpha :as g]))
 
 (def resources #{:food
                  :rations
@@ -52,6 +52,9 @@
                        :depressed
                        :weary})
 
+(def positive-traits
+  (set (filter (complement negative-traits) traits)))
+
 (def location-names
   ["Yuliak"
    "Gran"
@@ -86,8 +89,8 @@
 
 (def max-age 50)
 (def adulthood 20)
-(def optimal-pops-per-stage 125)
-(def pop-shift-per-delta 50)
+(def optimal-pops-per-stage 25)
+(def pop-shift-per-delta 10)
 (def max-hunger 4)
 (def max-buildings 4)
 (def max-skill (count skill-ranks))
@@ -98,8 +101,8 @@
 (def fulfillment-rate 10)
 (def fulfillment-decay 1)
 (def carry-modifier 3)
-(def organization-threshold 100)
-(def organization-multiplier 10)
+(def org-threshold 10)
+(def org-multiplier 2)
 
 (def crop->nutrients
   {:grapplewheat #{:n :k}
@@ -228,7 +231,7 @@
   {:name (gen-name)
    :born born
    :fulfillment (+ 40 (rand-int 21))
-   :traits #{}
+   :traits (set (take 1 (shuffle (vec positive-traits))))
    :passions #{}
    :skills (reduce
             (fn [skills* skill]
@@ -771,7 +774,8 @@
         (cond->
          hunger? (update :hunger inc)
          (not hunger?) (assoc :hunger 0)
-         sickness? (assoc :sickness poultice-deficit)))))
+         sickness? (assoc :sickness poultice-deficit)
+         (not sickness?) (assoc :sickness 0)))))
 
 (s/fdef apply-herd-upkeep
   :args (s/cat :herd ::herd)
@@ -876,7 +880,7 @@
             unused-nutrients (filter (complement nutrients*) nutrients)]
         ;; unused nutrients regrow
         (as-> location $
-          (update-nutrients unused-nutrients -1 $)         
+          (update-nutrients unused-nutrients -1 $)
           (assoc $ :ready? true)))
       ;; crop goes wild
       (and (true? (:ready? location))
@@ -924,7 +928,7 @@
 
 (defn inc-month [herd]
   (let [old-season (get-season herd)
-        herd* 
+        herd*
         (-> herd
             (update :month inc)
             (update :individuals
@@ -1028,3 +1032,125 @@
 (s/fdef consolidate-stores
   :args (s/cat :herd ::herd)
   :ret ::herd)
+
+(defn should-add-syndicate?
+  [herd]
+  (let [n (count (:syndicates herd))
+        x (* org-threshold (Math/pow org-multiplier n))
+        skill-amount (collective-skill herd :organizing)]
+    (> skill-amount x)))
+
+(s/fdef should-add-syndicate?
+  :args (s/cat :herd ::herd)
+  :ret boolean?)
+
+(s/def ::new-adults (s/coll-of ::individual))
+(s/def ::new-dead (s/coll-of ::individual))
+(s/def :info/event (s/nilable string?))
+(s/def :info/projects (s/coll-of string?))
+(s/def :info/dreams (s/coll-of string?))
+;; month info. refreshes after month ends
+(s/def ::info
+  (s/keys :req-un [::new-adults
+                   ::new-dead
+                   :info/event
+                   :info/projects
+                   :info/dreams]))
+
+(defn fresh-info
+  []
+  {:new-adults []
+   :new-dead []
+   :event nil
+   :projects []
+   :dreams []})
+
+(s/fdef fresh-info
+  :args (s/cat)
+  :ret ::info)
+
+(defn perish [info herd individual]
+  [(update info :new-dead conj individual)
+   (update herd :individuals
+           (vec (partial remove (partial = individual))))])
+
+(s/fdef perish
+  :args (s/cat :info ::info
+               :herd ::herd
+               :individual ::individual)
+  :ret (s/tuple ::info ::herd))
+
+(s/def ::min-passions (s/int-in 0 4))
+(s/def ::max-passions (s/int-in 0 4))
+(s/def ::age (s/int-in adulthood max-age))
+(s/def ::min-age ::age)
+(s/def ::max-age ::age)
+(s/def ::character (s/keys :opt-un [::traits
+                                    ::skills
+                                    ::min-passions
+                                    ::max-passions
+                                    ::min-age
+                                    ::max-age]))
+(s/def ::select (s/coll-of ::character))
+
+(defn match-select [herd individual {:keys [traits
+                                            skills
+                                            min-passions
+                                            max-passions
+                                            min-age
+                                            max-age]}]
+  (and (if traits
+         (every? some? (for [trait traits]
+                         (-> individual :traits trait)))
+         true)
+       (if skills
+         (every? true? (for [[skill value] skills]
+                         (-> individual :skills skill (>= value))))
+         true)
+       (if min-passions
+         (>= (count (:passions individual)) min-passions)
+         true)
+       (if max-passions
+         (< (count (:passions individual)) max-passions)
+         true)
+       (let [age (get-age herd individual)]
+         (and (if max-age
+                (< age max-age)
+                true)
+              (if min-age
+                (> age min-age)
+                true)))))
+
+(s/fdef match-select
+  :args (s/cat :herd ::herd
+               :individual ::individual
+               :select ::select)
+  :ret boolean?)
+
+(defn find-character [herd character-select]
+  (first
+   (for [individual (:individuals herd)
+         :when (match-select herd individual character-select)]
+     individual)))
+
+(s/fdef find-character
+  :args (s/cat :herd ::herd
+               :character-select ::character)
+  :ret (s/nilable ::individual))
+
+(defn get-cast [herd event-or-dream]
+  (seq
+   (for [character-select (:select event-or-dream)]
+     (find-character herd character-select))))
+
+(s/fdef get-cast
+  :args (s/cat :herd ::herd
+               :event-or-dream
+               (s/keys :req-un [::select]))
+  :ret (s/coll-of (s/nilable ::individual)))
+
+(defn herd-has-resource [herd resource n]
+  (<= n (get-in herd [:stores resource] 0)))
+
+(defn herd-has-skill [herd skill n]
+  (<= n (collective-skill herd skill)))

@@ -1,19 +1,20 @@
 (ns the-longtime-game.game
+  (:gen-class)
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.spec.alpha :as s]
             [the-longtime-game.core :as core]
-            [the-longtime-game.project :as project]
-            [the-longtime-game.event :as event]
             [the-longtime-game.repl :as repl]))
 
 (s/def ::spirit ::core/name)
 (s/def ::game (s/keys :req-un [::core/herd
                                ::spirit]))
 
+(def save-path-re #"longtime_save_(.+)\.edn")
+
 (defn save-path
   [path]
-  (str "save_" path ".edn"))
+  (str "longtime_save_" path ".edn"))
 
 (defn save-game
   [game path]
@@ -36,14 +37,14 @@
              the ancient path.
              I believe in us, you must understand!
              I believe in old age and young laughter,
-             of the strength in all that we might share.
+             in the strength of all that we might share.
              I dream of homes among the stars,
              of a long time for me, for us all.
              Are you out there?
              I believe in you.
              I pray to you:
              tell me your name."
-            :width 50))
+            :width repl/default-width))
   (let [spirit (repl/await-text "What shall the herd call you?"
                                 :forbidden forbidden
                                 :default "Longtime")
@@ -61,6 +62,7 @@
      (repl/quote-text
       (str "Game saved as " (save-path spirit))
       :prefix "?"))
+    (repl/print-herd herd)
     game))
 
 (defn prompt-for-game
@@ -81,7 +83,7 @@
              (map
               (fn [file]
                 (re-matches
-                 #"save_(.+)\.edn"
+                 save-path-re
                  (.getName file))))
              (filter some?)
              (map second))]
@@ -100,6 +102,5 @@
    herd
    (range)))
 
-(defn main
-  []
+(defn -main [& _]
   (game-loop (launch-game)))

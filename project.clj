@@ -6,4 +6,6 @@
   :dependencies [[org.clojure/clojure "1.10.0"]]
   :plugins [[lein-cloverage "1.2.2"]]
   :profiles {:dev {:dependencies [[org.clojure/test.check "1.1.1"]]}}
-  :repl-options {:init-ns the-longtime-game.core})
+  :repl-options {:init-ns the-longtime-game.core}
+  :main the-longtime-game.game
+  :aot [the-longtime-game.game])
