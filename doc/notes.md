@@ -11,3 +11,9 @@ Each month, some number of adults complete their journeying, and some number of 
 *Journeying* is a term for an adulthood ritual in which an individual survives one year on a solitary migration, and returns to where they started. Sometimes journeying individuals will join other herds for a few seasons, or live like an aurochs in the woods, or camp civilly with rations aplenty. Journeying confers one skill point, one passion, and one good trait.
 
 Journeying may also refer any migratory commitment a minot makes to a herd, and so adult minots that choose to join a herd are said to *come in from their journey* just the same as returning herdlings.
+
+## Regarding place descriptions
+
+When you visit a location, after its event, a description is generated from three elements. One of them is terrain-related, and two are generated from traits in the herd. That is, two *moments* occur, which pair a character selector with a short text blurb.
+
+The location blurb uses a function to map the location into a *remark*, which involves no characters. This may comment on the plains being grassy, a building existing, or the absence of buildings.

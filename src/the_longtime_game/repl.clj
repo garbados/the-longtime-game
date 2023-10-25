@@ -348,18 +348,21 @@
 
 (defn cause-event
   [info herd]
-  (let [{:keys [name marshal-fn text-fn effect] :as event}
-        (->> event/events
-             (filter
-              (partial event/can-event-trigger? info herd))
-             shuffle
-             first)
-        cast (event/get-cast herd event)
-        args (marshal-fn info herd)
-        blurb (text-fn info herd cast args)
-        info (assoc info :event name)]
-    (println (wrap-quote-text blurb))
-    (effect info herd cast args)))
+  (if (zero? (rand-int 3))
+    (let [{:keys [name marshal-fn text-fn effect] :as event}
+          (->> event/events
+               (filter
+                (partial event/can-event-trigger? info herd))
+               shuffle
+               first)
+          cast (core/get-cast herd event)
+          args (when marshal-fn
+                 (marshal-fn info herd))
+          blurb (text-fn info herd cast args)
+          info (assoc info :event name)]
+      (println (wrap-quote-text blurb))
+      (effect info herd cast args))
+    [info herd]))
 
 (defn select-project
   [info herd]
@@ -403,8 +406,9 @@
               (partial event/can-dream-trigger? info herd))
              shuffle
              first)
-        cast (event/get-cast herd dream)
-        args (marshal-fn info herd cast)
+        cast (core/get-cast herd dream)
+        args (when marshal-fn
+               (marshal-fn info herd cast))
         blurb (text-fn info herd cast args)
         choices (choices-fn info herd cast args)]
     (println (wrap-quote-text blurb))
@@ -534,7 +538,7 @@
           {:keys [new-adults new-dead] :as info} (marshal-info herd)
           ;; TODO announce with println
           herd (core/apply-pop-changes herd new-adults new-dead)
-          ;; [info herd] (cause-event info herd)
+          [info herd] (cause-event info herd)
           [info herd] (select-month-projects info herd)
           ;; herd (answer-prayer info herd)
           herd (maybe-add-syndicate herd)
