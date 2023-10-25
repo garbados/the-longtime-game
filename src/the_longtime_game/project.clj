@@ -57,7 +57,9 @@
                terrain (assoc :terrain terrain))
              :filter-fn
              (fn [_ location]
-               (> core/max-buildings (count (:infra location))))
+               (and
+                (not (contains? (:infra location) infra))
+                (> core/max-buildings (count (:infra location)))))
              :location-effect
              (fn [location]
                (update location :infra conj infra))}))
@@ -290,7 +292,8 @@
      :effect
      (fn [herd skill-amount]
        (let [modifier (skill->multiplier skill-amount)
-             amount (int (* 50 modifier))]
+             winter? (= 3 (core/get-season herd))
+             amount (int (* (if winter? 25 50) modifier))]
          (update-in herd [:stores :food] + amount)))}]))
 
 (s/def ::skills (s/map-of ::core/skill pos-int?))

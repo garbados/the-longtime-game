@@ -182,7 +182,10 @@
            true)
          (if-let [cast (core/get-cast herd dream)]
            (if-let [choices-fn (:choices-fn dream)]
-             (< 0 (count (choices-fn info herd cast)))
+             (if-let [marshal-fn (:marshal-fn dream)]
+               (let [args (marshal-fn info herd cast)]
+                 (< 0 (count (choices-fn info herd cast args))))
+               (< 0 (count (choices-fn info herd cast nil))))
              true)
            true))))
 

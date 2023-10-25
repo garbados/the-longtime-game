@@ -1072,7 +1072,7 @@
 (defn perish [info herd individual]
   [(update info :new-dead conj individual)
    (update herd :individuals
-           (vec (partial remove (partial = individual))))])
+           #(vec (remove (partial = individual) %)))])
 
 (s/fdef perish
   :args (s/cat :info ::info

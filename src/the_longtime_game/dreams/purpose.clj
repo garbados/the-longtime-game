@@ -7,19 +7,18 @@
   {:name "Purpose"
    :select [{:max-passions 2}]
    :choices-fn
-   (fn [_info _herd [dreamer]]
+   (fn [_info _herd [dreamer] _]
      (->> (:passions dreamer)
           (difference core/skills)
           vec
           shuffle
           (take 2)))
    :effect
-   (fn [info herd [dreamer] _ skill]
-     [info
-      (core/update-individual
-       herd
-       dreamer
-       #(update % :passions conj skill))])
+   (fn [_info herd [dreamer] _ skill]
+     (core/update-individual
+      herd
+      dreamer
+      #(update % :passions conj skill)))
    :text-fn
    (fn [_ __ [dreamer] _]
      (->> [(:name dreamer) "wonders about their purpose."
@@ -31,5 +30,4 @@
            (:name dreamer) "tosses and turns in their sleep,"
            "visions of futures roiling in their dreams."
            "A life spent well, they ponder. A life spent well..."]
-          (string/join " ")
-          (constantly)))})
+          (string/join " ")))})

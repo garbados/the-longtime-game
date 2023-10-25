@@ -56,7 +56,7 @@
                  (string/join
                   "\n"
                   (for [line section]
-                    (string/join " " [prefix line])))))]
+                    (str prefix " " line)))))]
     lines))
 
 (defn wrap-quote-text
@@ -81,7 +81,11 @@
         (concat [(string/join " " [prefix-h header])]
                 (map
                  (fn [option]
-                   (string/join " " [prefix option]))
+                   (let [option*
+                         (if (keyword? option)
+                           (name option)
+                           option)]
+                     (string/join " " [prefix option*])))
                  options)
                 [footer])]
     (string/join "\n" lines)))
@@ -126,9 +130,10 @@
 (defn select-from-options
   [prompt options & {:keys [may-cancel?]
                      :or {may-cancel? false}}]
-  (let [options* (map #(string/join ". " [(inc %1) %2])
-                      (range (count options))
-                      options)]
+  (let [options* (->> options
+                      (map #(if (keyword? %) (name %) %))
+                      (map #(string/join ". " [(inc %1) %2])
+                           (range (count options))))]
     (println (wrap-options prompt options*)))
   (let [answer (prompt-text)]
     (cond
@@ -237,21 +242,12 @@
            [(when-let [infra (seq (:infra location))]
               (string/join
                "\n"
-               (concat [(str "│├┬ Infrastructure")]
+               (concat [(str "┬ Infrastructure")]
                        (let [prefixes (match-prefix infra)
                              infra* (map vector infra prefixes)]
-                         (for [[i prefix] infra*]
-                           (str "││" prefix "─ " i))))))
-            (when-let [stores (seq (:stores location))]
-              (string/join
-               "\n"
-               (concat ["│├┬ Stored"]
-                       (let [stores (sort stores)
-                             prefixes (match-prefix stores)
-                             stores* (map into stores prefixes)]
-                         (for [[resource amount prefix] stores*
-                               :let [name* (-> resource name string/capitalize)]]
-                           (str "││" prefix "─ " name* ": " amount))))))
+                         (for [[i prefix] infra*
+                               :let [s (string/capitalize (name i))]]
+                           (str "││" prefix "─ " s))))))
             (when (some? (:flora location))
               (str "─ Flora: " (:flora location)))
             (when (some? (:depleted? location))
@@ -395,26 +391,28 @@
 
 (defn answer-prayer
   [info herd]
-  (let [{:keys [marshal-fn
-                choices-fn
-                text-fn
-                effect]
-         :as dream}
-        (->> event/dreams
-             (concat (:dreams info))
-             (filter
-              (partial event/can-dream-trigger? info herd))
-             shuffle
-             first)
-        cast (core/get-cast herd dream)
-        args (when marshal-fn
-               (marshal-fn info herd cast))
-        blurb (text-fn info herd cast args)
-        choices (choices-fn info herd cast args)]
-    (println (wrap-quote-text blurb))
-    (let [choice
-          (select-from-options "How do you counsel?" choices)]
-      (effect info herd cast args choice))))
+  (if (= 0 (rand-int 3))
+    (let [{:keys [marshal-fn
+                  choices-fn
+                  text-fn
+                  effect]
+           :as dream}
+          (->> event/dreams
+               (concat (:dreams info))
+               (filter
+                (partial event/can-dream-trigger? info herd))
+               shuffle
+               first)
+          cast (core/get-cast herd dream)
+          args (when marshal-fn
+                 (marshal-fn info herd cast))
+          blurb (text-fn info herd cast args)
+          choices (choices-fn info herd cast args)]
+      (println (wrap-quote-text blurb))
+      (let [choice
+            (select-from-options "How do you counsel?" choices)]
+        (effect info herd cast args choice)))
+    herd))
 
 (defn choose-next-location
   [herd]
@@ -469,7 +467,7 @@
         location (core/current-location herd)
         location
         (if (core/local-infra? herd :granary)
-          (update-in location [:stores :food] + leftovers)
+          (assoc-in location [:stores :food] leftovers)
           location)
         herd (core/assoc-location herd location)]
     (if (core/must-leave-some? herd)
@@ -492,17 +490,40 @@
 
 (def syndicate-remarks
   {:athletics
-   []
+   ["rigorous exertion"
+    "strenuous feats"]
    :craftwork
-   []
+   ["strange inventions"
+    "curious designs"]
    :geology
-   []
+   ["beautiful stonework"
+    "earthen foresight"]
    :herbalism
-   []
+   ["advanced greenlore"
+    "keen pathfinding"]
    :medicine
-   []
+   ["enlightening panaceas"
+    "gourmet dining"]
    :organizing
-   []})
+   ["meticulous planning"
+    "historical consideration"]})
+
+(defn announce-new-syndicate
+  [candidate]
+  (let [remarks (map syndicate-remarks candidate)
+        [r1 r2] (map rand-nth remarks)]
+    (println
+     (wrap-quote-text
+      (string/join
+       " "
+       ["Record-keepers and rhetoricians rejoice!"
+        "Enthusiasts have joined together in debate and duel."
+        "They bicker and bother, sussing with susurrus"
+        "the finer points of some greater ethos."
+        (str "Through " r1 " and " r2 ",")
+        "a potent consensus emerges,"
+        "a bright and capable vision!"
+        (str "So is founded " (core/syndicate-name candidate) ".")])))))
 
 (defn maybe-add-syndicate
   [herd]
@@ -510,24 +531,36 @@
     (let [votes (core/tally-votes (:individuals herd))
           candidates (core/rank-candidates votes)]
       (if-let [candidate (core/select-candidate (:syndicates herd) candidates)]
-        (let [remarks (map syndicate-remarks candidate)
-              [r1 r2] (map rand-nth remarks)]
-          (println
-           (wrap-quote-text
-            (string/join
-             " "
-             ["Record-keepers and rhetoricians rejoice!"
-              "Enthusiasts have joined together in debate and duel."
-              "They bicker and bother, sussing with susurrus"
-              "the finer points of some greater ethos."
-              (str "Through " r1 " and " r2 ", ")
-              "a potent consensus emerges,"
-              "a bright and capable vision!"
-              (str "So is founded " (core/syndicate-name candidate) "!")])))
+        (do
+          (announce-new-syndicate candidate)
           (await-confirmation)
           (update herd :syndicates conj candidate))
         herd))
     herd))
+
+(defn announce-pop-changes
+  [new-adults new-dead]
+  (when (seq new-adults)
+    (let [plural? (> 1 (count new-adults))
+          verb (if plural?
+                 "minots have"
+                 "minot has")
+          s? (if plural?
+               "s"
+               "")]
+      (println
+       (quote-text
+        (str (count new-adults) " " verb " come in from their journey" s? ": "
+             (string/join ", " (map :name new-adults)))))))
+  (when (seq new-dead)
+    (let [plural? (> 1 (count new-dead))
+          verb (if plural?
+                 "minots have"
+                 "minot has")]
+      (println
+       (quote-text
+        (str (count new-dead) " " verb " returned to soil: "
+             (string/join ", " (map :name new-dead))))))))
 
 (defn do-month
   [herd]
@@ -536,11 +569,11 @@
     (choose-next-location herd)
     (let [herd (core/consolidate-stores herd)
           {:keys [new-adults new-dead] :as info} (marshal-info herd)
-          ;; TODO announce with println
+          _ (announce-pop-changes new-adults new-dead)
           herd (core/apply-pop-changes herd new-adults new-dead)
           [info herd] (cause-event info herd)
           [info herd] (select-month-projects info herd)
-          ;; herd (answer-prayer info herd)
+          herd (answer-prayer info herd)
           herd (maybe-add-syndicate herd)
           herd (core/apply-herd-upkeep herd)
           herd (leave-behind herd)
