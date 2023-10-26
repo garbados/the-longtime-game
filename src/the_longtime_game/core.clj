@@ -29,6 +29,17 @@
                 :steppe
                 :mountain})
 
+(def buildings #{:granary
+                 :stadium
+                 :observatory
+                 :quarry
+                 :kitchen
+                 :workshop
+                 :wind-forge
+                 :monsoon-bellows
+                 :temple
+                 :hospital})
+
 (def traits #{:angry
               :kind
               :pensive
@@ -103,6 +114,8 @@
 (def carry-modifier 3)
 (def org-threshold 10)
 (def org-multiplier 2)
+(def hunger-rate 1/2)
+(def sickness-rate 1/3)
 
 (def crop->nutrients
   {:grapplewheat #{:n :k}
@@ -138,16 +151,6 @@
   ["Ba" "So" "Po" "Ma"
    "Na" "Mi" "Si" "Pa"
    "Zo" "Ze" "Ki" "Gi"])
-
-(def buildings #{:granary
-                 :stadium
-                 :observatory
-                 :quarry
-                 :kitchen
-                 :workshop
-                 :wind-forge
-                 :temple
-                 :hospital})
 
 (defn gen-name []
   (string/join "-" [(rand-nth first-syllable)
@@ -532,7 +535,9 @@
            :path [[(init-location :plains)]
                   [(init-location :forest)]
                   [(init-location :mountain)]
-                  [(init-location :steppe)]]})))
+                  [(init-location :steppe)]
+                  [(init-location :swamp)]
+                  [(init-location :jungle)]]})))
 
 (s/def ::herd
   (s/with-gen
@@ -750,15 +755,26 @@
                    (s/gen ::herd)))
   :ret ::herd)
 
+(defn calc-food-need [population]
+  (int (* hunger-rate population)))
+
+(defn calc-meds-need [population]
+  (int (* sickness-rate population)))
+
 (defn apply-herd-upkeep
   [{:keys [individuals stores] :as herd}]
   (let [{:keys [food rations poultices]} stores
+        {infra :infra} (current-location herd)
+        temple? (contains? infra :temple)
+        fulfillment-change (if temple?
+                             0
+                             (- fulfillment-decay))
         population (count individuals)
-        food-need (int (* 1/2 population))
+        food-need (calc-food-need population)
         food-deficit (max 0 (- food-need food))
         rations-deficit (- rations food-deficit)
         hunger? (and (> food-deficit 0) (> 0 rations-deficit))
-        poultice-need (int (* 1/4 population))
+        poultice-need (calc-meds-need population)
         poultice-deficit (max 0 (- poultice-need poultices))
         sickness? (< 0 poultice-deficit)]
     (-> herd
@@ -769,7 +785,7 @@
         (assoc-in [:stores :poultices]
                   (max 0 (- poultices poultice-need)))
         (assoc :individuals
-               (map #(update % :fulfillment - fulfillment-decay)
+               (map #(update % :fulfillment + fulfillment-change)
                     individuals))
         (cond->
          hunger? (update :hunger inc)

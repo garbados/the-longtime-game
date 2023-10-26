@@ -6,7 +6,7 @@
             [the-longtime-game.project :as project]
             [the-longtime-game.remark :refer [gen-remarks]]))
 
-(def default-width 50)
+(def default-width 80)
 
 (defn collect-text
   [s]
@@ -42,34 +42,30 @@
      (string/split-lines s)))))
 
 (defn quote-text
-  [s & {:keys [prefix width raw?]
+  [s & {:keys [prefix width]
         :or {prefix ">"
-             width default-width
-             raw? false}}]
+             width default-width}}]
   (let [width* (- width (count prefix))
         sections (map
                   #(wrap-text % width*)
-                  (if raw? [s] (collect-text s)))
-        lines (string/join
-               (str "\n" prefix "\n")
-               (for [section sections]
-                 (string/join
-                  "\n"
-                  (for [line section]
-                    (str prefix " " line)))))]
-    lines))
+                  (collect-text s))]
+    (string/join
+     (str "\n" prefix "\n")
+     (for [section sections]
+       (string/join
+        "\n"
+        (for [line section]
+          (str prefix " " line)))))))
 
 (defn wrap-quote-text
-  [s & {:keys [prefix header footer width raw?]
+  [s & {:keys [prefix header footer width]
         :or {header "┌────"
              prefix "│"
              footer "└────"
-             width default-width
-             raw? false}}]
+             width default-width}}]
   (let [text (quote-text s
                          :prefix prefix
-                         :width width
-                         :raw? raw?)]
+                         :width width)]
     (string/join "\n" [header text footer])))
 
 (defn wrap-options
@@ -200,12 +196,7 @@
         (->> syndicates
              (map core/syndicate-name)
              sort
-             (string/join ", "))
-        skill-levels
-        (map
-         (fn [skill]
-           [skill (core/collective-skill herd skill)])
-         core/skills)]
+             (string/join ", "))]
     (println "┌────")
     (println "├" (:name herd))
     (let [month (:month herd)
@@ -214,27 +205,27 @@
       (println (str "├─ Month: " month " (" season ")")))
     (println "├─ Population:" population)
     (println "├─ Syndicates:" syndicate-names)
-    (println "├─ Hunger:" (:hunger herd))
+    (println "├─ Hunger:"
+             (:hunger herd)
+             (str "(-" (core/calc-food-need population) ")"))
     (println "├─ Sickness:"
              (as-> (:sickness herd) $
                (/ $ population)
                (* $ 100)
                (float $)
                (format "%.2f" $)
-               (str $ "%")))
+               (str $ "%"))
+             (str "(-" (core/calc-meds-need population) ")"))
     (let [fulfillments (map :fulfillment (:individuals herd))
           average (as-> fulfillments $
                     (reduce + 0 $)
                     (/ $ population))
-          stdev (as-> fulfillments $
-                  (map - $ (repeat average))
-                  (map #(* % %) $)
-                  (reduce + $)
-                  (/ $ (dec population))
-                  (Math/sqrt $))]
-      (println "├┬ Fulfillment")
-      (println "│├─ avg:" (format "%.2f" (float average)))
-      (println "│└─ std:" (format "%.2f" stdev)))
+          minimum (reduce min fulfillments)
+          maximum (reduce max fulfillments)]
+      (println "├─ Fulfillment:"
+               "avg" (str (int average) "%;")
+               "min" (str minimum "%;")
+               "max" (str maximum "%"))))
     (let [location (core/current-location herd)
           strings
           (filter
@@ -284,7 +275,12 @@
            strings
            prefixes)))))
     (println "├┬ Skills")
-    (let [skills (sort skill-levels)
+    (let [skill-levels
+          (map
+           (fn [skill]
+             [skill (core/collective-skill herd skill)])
+           core/skills)
+          skills (sort skill-levels)
           prefixes (match-prefix skills)
           skills* (map into skills prefixes)]
       (doseq [[skill amount prefix] skills*
@@ -308,29 +304,7 @@
           locations* (map vector locations prefixes)]
       (doseq [[name* prefix] locations*]
         (println (str "│" prefix "─ " name*))))
-    (println "└────")))
-
-(defn print-individual
-  [herd individual]
-  (println "┌────")
-  (println "├" (:name individual))
-  (println "├─ Age:" (core/get-age herd individual))
-  (println "├─ Fulfillment:" (:fulfillment individual))
-  (when-let [traits (seq (:traits individual))]
-    (println "├─ Traits:" (string/join ", " traits)))
-  (when-let [passions (seq (:passions individual))]
-    (println "├─ Passions:" (string/join ", " (map name passions))))
-  (println "├┬ Skills")
-  (let [skills (->> (:skills individual)
-                    (filter
-                     (fn [[_ amount]]
-                       (> amount 0)))
-                    sort)
-        skills* (map into skills (match-prefix skills))]
-    (doseq [[skill amount prefix] skills*
-            :let [name* (-> skill name string/capitalize)]]
-      (println (str "│" prefix "─ " name* ": " amount))))
-  (println "└────"))
+    (println "└────"))
 
 (defn marshal-info
   [herd]
@@ -357,6 +331,7 @@
           blurb (text-fn info herd cast args)
           info (assoc info :event name)]
       (println (wrap-quote-text blurb))
+      (await-confirmation)
       (effect info herd cast args))
     [info herd]))
 
@@ -541,7 +516,7 @@
 (defn announce-pop-changes
   [new-adults new-dead]
   (when (seq new-adults)
-    (let [plural? (> 1 (count new-adults))
+    (let [plural? (< 1 (count new-adults))
           verb (if plural?
                  "minots have"
                  "minot has")
