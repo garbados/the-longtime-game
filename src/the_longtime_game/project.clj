@@ -177,7 +177,8 @@
                  (get-in herd [:stores :rations]))]
            (-> herd
                (update :individuals
-                       (partial map #(core/inc-fulfillment % amount)))
+                       (comp vec
+                             (partial map #(core/inc-fulfillment % amount))))
                (assoc-in [:stores :food] (max 0 remaining-food))
                (assoc-in [:stores :rations] remaining-rations))))})
     {:name "Gather deadfall"
@@ -251,7 +252,7 @@
        (let [modifier (skill->multiplier skill-amount)
              amount (* 50 modifier)
              stone (int (* amount 3/4))
-             ore (int (* amount 1/4))]
+             ore (int (* amount 1/8))]
          (-> herd
              (update-in [:stores :stone] + stone)
              (update-in [:stores :ore] + ore))))}
@@ -269,7 +270,7 @@
     {:name "Spelunk"
      :uses [:geology :athletics]
      :filter {:terrain :mountain
-              :stores {:tools 10}}
+              :stores {:tools 5}}
      :effect
      (fn [herd skill-amount]
        (let [modifier (skill->multiplier skill-amount)

@@ -14,11 +14,11 @@
 (def events
   [plague/event
    ration-rot/event
-   gruxnis-attack/event
-   depression/event
-   wound-healed/event
-   crossed-paths/event
-   fire/event
+   #_gruxnis-attack/event
+   #_depression/event
+   #_wound-healed/event
+   #_crossed-paths/event
+   #_fire/event
    #_{:name "Flash flood"
       :select [{:athletics 2}]
       :filter {:stores {:tools 10} :skills {:craftwork 10 :organizing 10}}

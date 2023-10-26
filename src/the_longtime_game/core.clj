@@ -733,7 +733,7 @@
                     (- stored amount))))
          {}
          carrying)]
-    (-> (assoc herd :stores carrying)
+    (-> (update herd :stores merge carrying)
         (assoc-in [:path 0 (:index herd) :stores] leaving))))
 
 (s/fdef keep-and-leave-behind
