@@ -114,8 +114,8 @@
 (def carry-modifier 3)
 (def org-threshold 10)
 (def org-multiplier 2)
-(def hunger-rate 1/2)
-(def sickness-rate 1/3)
+(def hunger-rate 1/3)
+(def sickness-rate 1/4)
 
 (def crop->nutrients
   {:grapplewheat #{:n :k}
@@ -971,18 +971,18 @@
 (defn gains-experience?
   [used syndicates {:keys [passions skills]}]
   (let [used* (filter #(> max-skill (get skills %)) used)
-        chance (* experience-rate (count used*))
         syndicate-counts (frequencies (reduce into syndicates []))
         syndicate-bonus #(get syndicate-counts % 0)
         passion-bonus #(if (contains? passions %) 1 0)]
-    (when (pos? chance)
-      (first
-       (filter
-        (fn [skill]
-          (let [threshold (reduce + 1 ((juxt syndicate-bonus passion-bonus) skill))
-                roll (rand-int chance)]
-            (>= threshold roll)))
-        used*)))))
+    (first
+     (filter
+      (fn [skill]
+        (let [bonus (+ 1
+                       (syndicate-bonus skill)
+                       (passion-bonus skill))
+              roll (rand-int experience-rate)]
+          (>= bonus roll)))
+      used*))))
 
 (s/fdef gains-experience?
   :args (s/cat :used ::uses

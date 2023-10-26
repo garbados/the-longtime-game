@@ -164,26 +164,28 @@
                             (false? (:depleted? %2)))
          deplete-land #(assoc % :depleted? true)]
      [(merge
-       (gathering-project
-        [:herbalism]
-        50
-        [[:wood 1]
-         [:bone 1/2]]
+       (gathering-project [:herbalism] 50 [[:wood 1]
+                                           [:bone 1/2]]
         :bonus-fn flora-bonus)
        {:name "Gather deadfall"
         :filter {:terrain :forest}
         :filter-fn flora-filter
         :location-effect deplete-land})
       (merge
-       (gathering-project
-        [:herbalism]
-        100
-        [[:food 1]]
+       (gathering-project [:herbalism] 100 [[:food 1]]
         :bonus-fn flora-bonus)
        {:name "Eat the land"
         :filter {:terrain :forest}
         :filter-fn flora-filter
-        :location-effect deplete-land})])
+        :location-effect deplete-land})
+      (merge
+       (gathering-project [:geology] 50 [[:ore 1]])
+       {:name "Gather bog-iron"
+        :filter {:terrain :swamp}
+        :filter-fn #(false? (:depleted? %2))
+        :location-effect
+        (fn [location]
+          (assoc location :depleted? true))})])
    [{:name "Explore"
      :uses [:organizing]
      :filter {:skills {:organizing 20}}
@@ -286,13 +288,6 @@
      (gathering-project [:geology] 50 [[:stone 1]
                                        [:ore 1/10]])
      {:name "Gather stones"})
-    (merge
-     (gathering-project [:geology] 50 [[:ore 1]])
-     {:name "Gather bog-iron"
-      :filter {:terrain :swamp}
-      :location-effect
-      (fn [location]
-        (assoc location :depleted? true))})
     (merge
      (gathering-project [:geology
                          :athletics] 50 [[:ore 1]])
