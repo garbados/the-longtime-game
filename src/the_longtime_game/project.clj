@@ -1,7 +1,8 @@
 (ns the-longtime-game.project
   (:require [clojure.spec.alpha :as s]
-            [the-longtime-game.core :as core]
-            [clojure.spec.gen.alpha :as g]))
+            [clojure.spec.gen.alpha :as g]
+            [clojure.string :as string]
+            [the-longtime-game.core :as core]))
 
 (defn skill->multiplier
   [skill-amount]
@@ -57,8 +58,9 @@
 
 (defn planting-project
   [crop]
-  (let [[nutrients amount] (core/crop-info crop)]
-    {:name (str "Plant " (name crop))
+  (let [[nutrients amount] (core/crop-info crop)
+        nutrient-names (string/join ", " (map name nutrients))]
+    {:name (str "Plant " (name crop) " (" nutrient-names ")")
      :uses [:herbalism]
      :filter (cond-> {:terrain :plains
                       :season 0}
@@ -69,7 +71,7 @@
        (and
         (or (nil? (:crop location))
             (true? (:wild? location)))
-        (every? true? (map #(>= (get location %) amount) nutrients))))
+        (every? true? (map #(>= (get location % 0) amount) nutrients))))
      :location-effect
      (fn [location]
        (-> (core/update-nutrients nutrients amount location)
@@ -80,7 +82,7 @@
 (defn production-project
   [uses resource product x n & {:keys [infra]}]
   {:uses uses
-   :filter {:stores (assoc {} resource x)}
+   :filter {:stores {resource x}}
    :effect
    (fn [herd skill-amount]
      (let [infra-bonus
@@ -123,7 +125,8 @@
      [:observatory
       :organizing
       50
-      {:wood 10 :stone 10 :tools 10}]
+      {:wood 10 :stone 10 :tools 10}
+      :mountain]
      [:quarry
       :geology
       50
@@ -161,14 +164,18 @@
      [:hydroweight-battery
       :craftwork
       175
-      {:wood 50 :stone 200 :metal 150 :tools 50}]])
+      {:wood 50 :stone 200 :metal 150 :tools 50}]
+     [:mag-forge
+      :craftwork
+      200
+      {:wood 50 :stone 200 :metal 300 :tools 100}]])
    (map
     #(apply manufacturing-project %)
     [[:stone 1]
      [:bone  2]
      [:metal 4]])
    (let [flora-bonus #(:flora (core/current-location %))
-         flora-filter #(and (> (:flora %2) 0)
+         flora-filter #(and (> (:flora %2 0) 0)
                             (false? (:depleted? %2)))
          deplete-land #(assoc % :depleted? true)]
      [(merge
@@ -276,6 +283,17 @@
                :filter-fn
                (fn [herd _]
                  (core/local-infra? herd :wind-forge))))
+    (-> (production-project [:craftwork]
+                            :ore
+                            :metal
+                            50
+                            1/2
+                            :infra :hydroweight-battery)
+        (assoc-in [:filter :season] 2)
+        (assoc :name "Smelt metal"
+               :filter-fn
+               (fn [herd _]
+                 (core/local-infra? herd :mag-forge))))
     (merge
      (production-project [:medicine]
                          :food
@@ -294,7 +312,8 @@
      {:name "Cook rations"})
     (merge
      (gathering-project [:geology] 50 [[:stone 1]
-                                       [:ore 1/10]])
+                                       [:ore 1/10]]
+                        :infra :quarry)
      {:name "Gather stones"})
     (merge
      (gathering-project [:geology

@@ -300,11 +300,17 @@
                 :let [name* (-> resource name string/capitalize)]]
           (println (str "│" prefix "─ " name* ": " amount)))))
     (println "├┬ Next Stage" (str "(of " (count (:path herd)) ")"))
-    (let [locations (sort (map :name (second (:path herd))))
-          prefixes (match-prefix locations)
-          locations* (map vector locations prefixes)]
-      (doseq [[name* prefix] locations*]
-        (println (str "│" prefix "─ " name*))))
+    (let [locations (sort
+                     #(compare (:name %1) (:name %2))
+                     (second (:path herd)))
+          prefixes (match-prefix locations)]
+      (doseq [[location prefix] (map vector locations prefixes)
+              :let [name* (:name location)
+                    infra (seq (:infra location))]]
+        (println
+         (if infra
+           (str "│" prefix "─ " name* " (" (string/join " " infra) ")")
+           (str "│" prefix "─ " name*)))))
     (println "└────"))
 
 (defn marshal-info
