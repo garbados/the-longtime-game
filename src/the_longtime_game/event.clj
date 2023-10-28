@@ -2,11 +2,13 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.spec.gen.alpha :as g]
             [the-longtime-game.core :as core]
+            [the-longtime-game.dreams.catharsis :as catharsis]
+            [the-longtime-game.dreams.doubt :as doubt]
+            [the-longtime-game.dreams.gratitude :as gratitude]
             [the-longtime-game.dreams.purpose :as purpose]
             [the-longtime-game.events.crossed-paths :as crossed-paths]
             [the-longtime-game.events.depression :as depression]
             [the-longtime-game.events.fire :as fire]
-            [the-longtime-game.events.gruxnis-attack :as gruxnis-attack]
             [the-longtime-game.events.plague :as plague]
             [the-longtime-game.events.ration-rot :as ration-rot]
             [the-longtime-game.events.wound-healed :as wound-healed]))
@@ -15,10 +17,10 @@
   [plague/event
    ration-rot/event
    #_gruxnis-attack/event
-   #_depression/event
-   #_wound-healed/event
-   #_crossed-paths/event
-   #_fire/event
+   depression/event
+   wound-healed/event
+   crossed-paths/event
+   fire/event
    #_{:name "Flash flood"
       :select [{:athletics 2}]
       :filter {:stores {:tools 10} :skills {:craftwork 10 :organizing 10}}
@@ -46,23 +48,24 @@
 
 (def dreams
   [purpose/dream
-   #_{:name "Doubt"
-    :select [{:traits #{:depressed}}]}
+   doubt/dream
+   catharsis/dream
+   gratitude/dream
    #_{:name "Exhaustion"}
    #_{:name "Gratitude"
-    :select [{}]
-    :filter-fn
-    (fn [_ herd]
-      (< 70 (/ (reduce + (map :fulfillment (:individuals herd)))
-               (count (:individuals herd)))))}
+      :select [{}]
+      :filter-fn
+      (fn [_ herd]
+        (< 70 (/ (reduce + (map :fulfillment (:individuals herd)))
+                 (count (:individuals herd)))))}
    #_{:name "Grief"
-    :select [{}]
-    :filter-fn
-    (fn [{:keys [deaths]} _]
-      (< 0 (count deaths)))
-    :marshal-fn
-    (fn [{:keys [deaths]} _ _]
-      (rand-nth deaths))}
+      :select [{}]
+      :filter-fn
+      (fn [{:keys [deaths]} _]
+        (< 0 (count deaths)))
+      :marshal-fn
+      (fn [{:keys [deaths]} _ _]
+        (rand-nth deaths))}
    #_{:name "Joy"}
    #_{:name "Growth"}])
 
@@ -114,10 +117,10 @@
 (s/def ::event
   (s/with-gen
     (s/keys :req-un [::core/name
-                     ::select
                      :event/effect
                      :event/text-fn]
             :opt-un [::filter
+                     ::core/select
                      ::marshal-fn
                      ::filter-fn])
     #(g/elements events)))
@@ -126,7 +129,7 @@
   (s/with-gen
     (s/and
      (s/keys :req-un [::core/name
-                      ::select
+                      ::core/select
                       :dream/effect
                       ::marshal-fn
                       ::choices-fn
@@ -155,13 +158,17 @@
            true)
          (every?
           some?
-          (for [character-select (:select event)]
+          (for [character-select (:select event [])]
             (core/find-character herd character-select))))))
 
 (s/fdef can-event-trigger?
   :args (s/cat :herd ::core/herd
                :event ::event)
   :ret boolean?)
+
+(defn dream-has-options?
+  [info herd cast args choices-fn]
+  (< 0 (count (choices-fn info herd cast args))))
 
 (defn can-dream-trigger?
   [info herd dream]
@@ -178,16 +185,18 @@
             (let [amount (get-in herd [:stores resource] 0)]
               (>= amount required))))
          (if-let [filter-fn (:filter-fn dream)]
-           (boolean (filter-fn herd))
+           (boolean (filter-fn info herd))
            true)
-         (if-let [cast (core/get-cast herd dream)]
-           (if-let [choices-fn (:choices-fn dream)]
-             (if-let [marshal-fn (:marshal-fn dream)]
-               (let [args (marshal-fn info herd cast)]
-                 (< 0 (count (choices-fn info herd cast args))))
-               (< 0 (count (choices-fn info herd cast nil))))
-             true)
-           true))))
+         (let [select (:select dream)
+               cast (core/get-cast herd dream)]
+           (if (and (some? select) (nil? cast))
+             false
+             (if-let [choices-fn (:choices-fn dream)]
+               (if-let [marshal-fn (:marshal-fn dream)]
+                 (let [args (marshal-fn info herd cast)]
+                   (dream-has-options? info herd cast args choices-fn))
+                 (dream-has-options? info herd cast nil choices-fn))
+               true))))))
 
 (s/fdef can-dream-trigger?
   :args (s/cat :info ::core/info

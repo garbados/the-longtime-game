@@ -126,30 +126,32 @@
 (defn select-from-options
   [prompt options & {:keys [may-cancel?]
                      :or {may-cancel? false}}]
-  (let [options* (->> options
+  (let [options (sort options)
+        options* (->> options
                       (map #(if (keyword? %) (name %) %))
                       (map #(string/join ". " [(inc %1) %2])
                            (range (count options))))]
-    (println (wrap-options prompt options*)))
-  (let [answer (prompt-text)]
-    (cond
-      (and (int? answer)
-           (< (dec answer) (count options)))
-      (nth options (dec answer))
-      (and may-cancel?
-           (= answer "cancel"))
-      nil
-      :else
-      (select-from-options prompt options :may-cancel? may-cancel?))))
+    (println (wrap-options prompt options*))
+    (let [answer (prompt-text)]
+      (cond
+        (and (int? answer)
+             (< (dec answer) (count options)))
+        (nth options (dec answer))
+        (and may-cancel?
+             (= answer "cancel"))
+        nil
+        :else
+        (select-from-options prompt options :may-cancel? may-cancel?)))))
 
 (defn select-in-range
-  [prompt n]
+  [prompt n & {:keys [default]}]
   (println (quote-text prompt :prefix "!"))
   (let [answer (prompt-text)]
     (if (and (int? answer)
              (<= answer n))
       answer
-      (select-in-range prompt n))))
+      (or default
+          (select-in-range prompt n)))))
 
 (defn await-text
   [prompt & {:keys [forbidden prefix default]
@@ -159,7 +161,6 @@
   (let [default-forbidden? (contains? forbidden default)
         answer (prompt-text :prefix prefix
                             :forbidden forbidden)]
-    (print "\n")
     (if (seq answer)
       (if (and (= answer default)
                default-forbidden?)
@@ -382,11 +383,14 @@
           args (when marshal-fn
                  (marshal-fn info herd cast))
           blurb (text-fn info herd cast args)
-          choices (choices-fn info herd cast args)]
+          choices (when choices-fn
+                    (choices-fn info herd cast args))]
       (println (wrap-quote-text blurb))
-      (let [choice
-            (select-from-options "How do you counsel?" choices)]
-        (effect info herd cast args choice)))
+      (if choices
+        (let [choice
+              (select-from-options "How do you counsel?" choices)]
+          (effect info herd cast args choice))
+        (effect info herd cast args nil)))
     herd))
 
 (defn choose-next-location
@@ -421,7 +425,8 @@
                          s (name resource)]
                      (select-in-range (str "Carry how much " s "? "
                                            amount " " s "; " remaining " carryable.")
-                                      n)))]
+                                      n
+                                      :default amount)))]
              [(- remaining carry)
               (assoc carrying resource carry)]))
          [remaining {}]

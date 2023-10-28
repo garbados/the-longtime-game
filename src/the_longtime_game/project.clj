@@ -153,7 +153,15 @@
      [:hospital
       :medicine
       50
-      {:wood 10 :stone 10 :tools 10}]])
+      {:wood 10 :stone 10 :tools 10}]
+     [:quern-generator
+      :craftwork
+      150
+      {:wood 10 :stone 100 :metal 100 :tools 50}]
+     [:hydroweight-battery
+      :craftwork
+      175
+      {:wood 50 :stone 200 :metal 150 :tools 50}]])
    (map
     #(apply manufacturing-project %)
     [[:stone 1]
@@ -205,7 +213,7 @@
                  (fn [path]
                    (vec
                     (concat (subvec path 0 2)
-                            locations
+                            [locations]
                             (subvec path 2)))))))}
     {:name "Harvest crops"
      :uses [:herbalism]

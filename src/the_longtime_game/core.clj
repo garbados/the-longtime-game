@@ -677,24 +677,35 @@
                :skill skills)
   :ret number?)
 
+(defn calc-sickness-penalty [population sickness]
+  (-> (/ sickness population)
+      (max 0)
+      (min 1)))
+
+(s/fdef calc-sickness-penalty
+  :args (s/cat :population nat-int?
+               :sickness nat-int?)
+  :ret (s/and number? #(>= 1 % 0)))
+
 (defn collective-skill
   [{:keys [individuals syndicates hunger sickness]} skill]
-  (int (* (reduce
-           #(+ %1 (individual-skill %2 skill))
-           0
-           individuals)
-          (-> (->> syndicates
-                   (reduce into [])
-                   frequencies)
-              (get skill 0)
-              (* 1/2)
-              (+ 1/2))
-          (if (> hunger 0)
-            (- 1 (/ hunger max-hunger))
-            1)
-          (if (> sickness 0)
-            (max 0 (- 1 (/ sickness (count individuals))))
-            1))))
+  (let [individuals-bonus
+        (reduce
+         #(+ %1 (individual-skill %2 skill))
+         0
+         individuals)
+        syndicate-bonus
+        (-> (count (filter skill syndicates))
+            (* 1/2)
+            (+ 1/2))
+        hunger-penalty
+        (- 1 (/ hunger max-hunger))
+        sickness-penalty
+        (- 1 (calc-sickness-penalty (count individuals) sickness))]
+    (int (* individuals-bonus
+            syndicate-bonus
+            hunger-penalty
+            sickness-penalty))))
 
 (s/fdef collective-skill
   :args (s/cat :herd ::herd
@@ -1099,10 +1110,14 @@
 (s/def ::min-passions (s/int-in 0 4))
 (s/def ::max-passions (s/int-in 0 4))
 (s/def ::age (s/int-in adulthood max-age))
+(s/def ::min-fulfillment (s/int-in 0 max-fulfillment))
+(s/def ::max-fulfillment (s/int-in 0 max-fulfillment))
 (s/def ::min-age ::age)
 (s/def ::max-age ::age)
 (s/def ::character (s/keys :opt-un [::traits
                                     ::skills
+                                    ::min-fulfillment
+                                    ::max-fulfillment
                                     ::min-passions
                                     ::max-passions
                                     ::min-age
@@ -1111,6 +1126,8 @@
 
 (defn match-select [herd individual {:keys [traits
                                             skills
+                                            min-fulfillment
+                                            max-fulfillment
                                             min-passions
                                             max-passions
                                             min-age
@@ -1135,6 +1152,13 @@
                 true)
               (if min-age
                 (> age min-age)
+                true)))
+       (let [fulfillment (:fulfillment individual)]
+         (and (if min-fulfillment
+                (>= fulfillment min-fulfillment)
+                true)
+              (if max-fulfillment
+                (< fulfillment max-fulfillment)
                 true)))))
 
 (s/fdef match-select
@@ -1156,8 +1180,10 @@
 
 (defn get-cast [herd event-or-dream]
   (seq
-   (for [character-select (:select event-or-dream)]
-     (find-character herd character-select))))
+   (for [character-select (:select event-or-dream [])
+         :let [character (find-character herd character-select)]
+         :when (some? character)]
+     character)))
 
 (s/fdef get-cast
   :args (s/cat :herd ::herd
