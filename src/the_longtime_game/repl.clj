@@ -342,11 +342,66 @@
       (effect info herd cast args))
     [info herd]))
 
+(defn leave-behind-voluntarily
+  [herd]
+  (let [[remaining leaving]
+        (reduce
+         (fn [[remaining leaving] resource]
+           (let [amount (get-in herd [:stores resource] 0)
+                 carry
+                 (if (zero? amount)
+                   0
+                   (let [n (min amount remaining)
+                         s (name resource)]
+                     (select-in-range (str "Leave behind how much " s "? "
+                                           amount " " s "; " remaining " carryable.")
+                                      n
+                                      :default 0)))]
+             [(- remaining carry)
+              (assoc leaving resource carry)]))
+         [(core/carry-limit herd) {}]
+         core/carryable)]
+    (if (> remaining 0)
+      (-> herd
+          (update :stores (partial merge-with -) leaving)
+          (update-in [:path 0 (:index herd) :stores]
+                     (partial merge-with +) leaving))
+      (leave-behind-voluntarily herd))))
+
+(def repl-projects
+  (concat project/projects
+          [{:name "Dismantle infrastructue"
+            :uses [:craftwork]
+            :filter-fn
+            (fn [_ {:keys [infra]}]
+              (> (count infra) 0))
+            :effect
+            (fn [herd location]
+              (let [infra (:infra location)
+                    choice (select-from-options
+                            "Select infrastructure to dismantle:"
+                            infra)]
+                (core/assoc-location
+                 herd
+                 (disj location :infra choice))))}
+           {:name "Leave resources behind"
+            :uses []
+            :filter-fn
+            (fn [{:keys [stores]} _]
+              (> 0 (reduce
+                    (fn [total [_ amount]]
+                      (+ total amount))
+                    0
+                    (seq stores))))
+            :effect
+            (fn [herd _]
+              (leave-behind-voluntarily herd))}]))
+
 (defn select-project
   [info herd]
   (let [candidates
         (filter (partial project/can-enact? herd)
-                project/projects)
+                repl-projects)
         name->candidate
         (->> candidates
              (map

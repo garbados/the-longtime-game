@@ -204,24 +204,28 @@
    [{:name "Explore"
      :uses [:organizing]
      :filter {:skills {:organizing 20}}
+     :filter-fn
+     (fn [herd _]
+       (>= 3 (count (second (:path herd)))))
      :effect
      (fn [herd _]
-       (let [location (-> core/terrains vec rand-nth core/init-location)]
+       (let [terrains (set (map :terrain (get-in herd [:path 1])))
+             ok-terrains (filter (complement terrains) core/terrains)
+             location (-> ok-terrains vec rand-nth core/init-location)]
          (update-in herd [:path 1] conj location)))}
     {:name "Elongate path"
      :uses []
      :filter {:skills {:organizing 100}}
      :effect
      (fn [herd _]
-       (let [options (vec core/terrains)
-             locations [(-> options rand-nth core/init-location)
-                        (-> options rand-nth core/init-location)]]
+       (let [options (take 2 (shuffle (vec core/terrains)))
+             locations (vec (map core/init-location options))]
          (update herd :path
                  (fn [path]
                    (vec
-                    (concat (subvec path 0 2)
+                    (concat (subvec path 0 1)
                             [locations]
-                            (subvec path 2)))))))}
+                            (subvec path 1)))))))}
     {:name "Harvest crops"
      :uses [:herbalism]
      :filter {:terrain :plains}

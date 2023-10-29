@@ -4,14 +4,19 @@
             [the-longtime-game.core :as core]))
 
 (def general-remarks
-  ["Wild reeds sway on a river's edge."])
+  ["Wild reeds sway on a river's edge."
+   "Night stars glimmering grace the herd as it sleeps."
+   "Herdlings frollick and laugh, making trouble wherever they can."])
 
 (def spring-remarks
-  ["Golden saffron blossoms fly in the verdant breeze."])
+  ["Golden saffron blossoms fly in the verdant breeze."
+   "The pale gloss of snow leaves the land to grow shining emerald."
+   "The theater of another day unfurls with dawn's petrichor."])
 
 (def summer-remarks
   ["Cloudless skies span wide above the herd."
-   "A beating yellow sun gazes upon the land's cloven denizens."])
+   "A beating yellow sun gazes upon the land's cloven denizens."
+   "Warmth wriggles into the fur of every minot, to varying delight and annoyance."])
 
 (def fall-remarks
   ["A cool and cloudy day envelops the land."
@@ -19,7 +24,8 @@
    "Hooves trudge through mud under bleak skies."])
 
 (def winter-remarks
-  ["Snow gathers on the wind, beating against fur and fabric."])
+  ["Snow gathers on the wind, beating against fur and fabric."
+   "Cold gathers, inspiring fur to bristle and teeth to chatter."])
 
 (def season->remarks
   {0 spring-remarks
@@ -41,7 +47,7 @@
 (def mountain-remarks
   ["Stone faces loom silent on a windless day."
    "Mountain peaks pierce the clouds, hiding behind their mists."
-   "Birdsong echoes across mountain valleys."])
+   "Birdsong echoes across cliffside valleys."])
 
 (def jungle-remarks
   ["Air thick with life buzzes and twitters."
@@ -51,7 +57,8 @@
   ["A long-forgotten log of bog butter emerges from the fetid damp."])
 
 (def steppe-remarks
-  ["Struggling grasses sweep over the broad terrain."])
+  ["Struggling grasses sweep over the broad terrain."
+   "A big sky embraces the land, the vastness of eternity overhead."])
 
 (def terrain->remarks
   {:plains plains-remarks

@@ -742,16 +742,10 @@
 
 (defn keep-and-leave-behind
   [herd carrying]
-  (let [leaving
-        (reduce
-         (fn [all [resource amount]]
-           (let [stored (get-in herd [:stores resource] 0)]
-             (assoc all resource
-                    (- stored amount))))
-         {}
-         carrying)]
+  (let [leaving (merge-with - (:stores herd) carrying)]
     (-> (update herd :stores merge carrying)
-        (assoc-in [:path 0 (:index herd) :stores] leaving))))
+        (update-in [:path 0 (:index herd) :stores]
+                   (partial merge-with +) leaving))))
 
 (s/fdef keep-and-leave-behind
   :args (s/with-gen
