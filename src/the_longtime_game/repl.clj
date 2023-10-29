@@ -306,10 +306,10 @@
           prefixes (match-prefix locations)]
       (doseq [[location prefix] (map vector locations prefixes)
               :let [name* (:name location)
-                    infra (seq (:infra location))]]
+                    infra (seq (map (comp string/capitalize name) (:infra location)))]]
         (println
          (if infra
-           (str "│" prefix "─ " name* " (" (string/join " " infra) ")")
+           (str "│" prefix "─ " name* " (" (string/join ", " infra) ")")
            (str "│" prefix "─ " name*)))))
     (println "└────"))
 
@@ -420,7 +420,7 @@
             (str "The herd has too many goods to carry (" remaining ")")
             (for [[resource amount] (seq (:stores herd))]
               (str (name resource) ": " amount))))
-        [_ carrying]
+        [remaining carrying]
         (reduce
          (fn [[remaining carrying] resource]
            (let [amount (get-in herd [:stores resource] 0)
@@ -437,14 +437,19 @@
               (assoc carrying resource carry)]))
          [remaining {}]
          core/carryable)]
-    (println
-     (wrap-options
-      "The herd will carry with it:"
-      (for [[resource amount] (seq carrying)]
-        (str (name resource) ": " amount))))
-    (if (select-from-options "OK?" [true false])
-      (core/keep-and-leave-behind herd carrying)
-      (decide-carrying herd))))
+    (if (> 0 remaining)
+      (do
+        (println (quote-text (str "Carrying too much! Carry" remaining "less.")))
+        (decide-carrying herd))
+      (do
+        (println
+         (wrap-options
+          "The herd will carry with it:"
+          (for [[resource amount] (seq carrying)]
+            (str (name resource) ": " amount))))
+        (if (select-from-options "OK?" [true false])
+          (core/keep-and-leave-behind herd carrying)
+          (decide-carrying herd))))))
 
 (defn leave-behind
   [herd]
@@ -453,7 +458,7 @@
         location (core/current-location herd)
         location
         (if (core/local-infra? herd :granary)
-          (assoc-in location [:stores :food] leftovers)
+          (update location [:stores :food] #(if %1 (+ %1 %2) %2) leftovers)
           location)
         herd (core/assoc-location herd location)]
     (if (core/must-leave-some? herd)

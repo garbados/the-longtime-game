@@ -9,6 +9,7 @@
             [the-longtime-game.events.crossed-paths :as crossed-paths]
             [the-longtime-game.events.depression :as depression]
             [the-longtime-game.events.fire :as fire]
+            [the-longtime-game.events.journeying :as journeying]
             [the-longtime-game.events.plague :as plague]
             [the-longtime-game.events.ration-rot :as ration-rot]
             [the-longtime-game.events.wound-healed :as wound-healed]))
@@ -21,6 +22,8 @@
    wound-healed/event
    crossed-paths/event
    fire/event
+   journeying/solo-journeying-event
+   journeying/many-journeying-event
    #_{:name "Flash flood"
       :select [{:athletics 2}]
       :filter {:stores {:tools 10} :skills {:craftwork 10 :organizing 10}}

@@ -541,7 +541,8 @@
 
 (s/def ::herd
   (s/with-gen
-    (s/keys :req-un [::individuals
+    (s/keys :req-un [::name
+                     ::individuals
                      ::syndicates
                      ::stores
                      ::hunger
