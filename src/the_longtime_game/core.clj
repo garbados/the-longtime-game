@@ -29,16 +29,48 @@
                 :steppe
                 :mountain})
 
-(def buildings #{:granary
-                 :stadium
-                 :observatory
-                 :quarry
+(def buildings #{:atomic-reactor
+                 :chargepot-generator
+                 :eldermothertree
+                 :flyer-market
+                 :granary
+                 :hospital
                  :kitchen
-                 :workshop
-                 :wind-forge
+                 :lodge
+                 :mag-launchpad
                  :monsoon-bellows
+                 :observatory
+                 :quern-generator
+                 :pluriversity
+                 :port-cove
+                 :quarry
+                 :stadium
+                 :stonetower-battery
                  :temple
-                 :hospital})
+                 :wind-forge
+                 :workshop})
+
+(def early-contacts #{:auter
+                      :hard
+                      :felidar
+                      :er-sol})
+
+(def mid-contacts #{:dod
+                    :saurek})
+
+(def late-contacts #{:haroot
+                     :rak
+                     :dabulan})
+
+(def contacts (reduce into #{} [early-contacts
+                                mid-contacts
+                                late-contacts]))
+
+(def space-infra #{:probe
+             :station
+             :shipyard
+             :ringworld
+             :mobile-ringworld})
 
 (def traits #{:angry
               :kind
@@ -116,6 +148,7 @@
 (def org-multiplier 2)
 (def hunger-rate 1/3)
 (def sickness-rate 1/4)
+(def contact-rate 3)
 
 (def crop->nutrients
   {:grapplewheat #{:n :k}
@@ -141,6 +174,43 @@
    1 "summer"
    2 "fall"
    3 "winter"})
+
+(def buildings-info
+  (reduce
+   (fn [all building-info]
+     (assoc all (:name building-info) building-info))
+   {}
+   [{:name :atomic-reactor
+     :description "A steam turbine powered by the heat of decaying isotopes."
+     :detail "Produces energy each month."
+     :uses [:geology]
+     :filter
+     {:skills {:geology 500 :craftwork 500}
+      :stores {:stone 300 :metal 1000 :tools 500}}
+     :filter-fn
+     (fn [herd _]
+       (contains? (:contacts herd) :rak))}
+    {:name :chargepot-generator
+     :description "A vat of chemicals that binds solar heat to unstable polymers."
+     :detail "Produces energy each summer."
+     :uses [:geology]
+     :filter
+     {:skills {:geology 200 :craftwork 200}
+      :stores {:stone 200 :metal 200 :tools 100}}
+     :filter-fn
+     (fn [herd _]
+       (contains? (:contacts herd) :felidar))}
+    {:name :eldermothertree
+     :description "A venerated oldgrowth, shaped and loved."
+     :detail "Raises the forest's flora each winter."
+     :uses [:herbalism]
+     :filter
+     {:skills {:herbalism 200 :craftwork 200}
+      :stores {:wood 300 :rations 150 :poultices 100}}}]))
+
+(defn building-name
+  [building-info]
+  (string/capitalize (name (:name building-info))))
 
 (def first-syllable
   ["Il" "Ol" "Ib" "Ak"
@@ -409,6 +479,7 @@
 (s/def ::ready? boolean?)
 (s/def ::flora (s/int-in 0 5))
 (s/def ::depleted? boolean?)
+(s/def ::energy nat-int?)
 
 (defn name-location [terrain]
   (let [prefix (string/join
@@ -432,17 +503,20 @@
         :p 2
         :crop nil
         :wild? false
-        :ready? false}
+        :ready? false
+        :energy 0}
        :forest
        {:name name*
         :terrain :forest
         :infra #{}
         :flora 1
-        :depleted? false}
+        :depleted? false
+        :energy 0}
        :mountain
        {:name name*
         :terrain :mountain
-        :infra #{}}
+        :infra #{}
+        :energy 0}
        :steppe
        {:name name*
         :terrain :steppe}
@@ -450,11 +524,13 @@
        {:name name*
         :terrain :swamp
         :infra #{}
-        :depleted? false}
+        :depleted? false
+        :energy 0}
        :jungle
        {:name name*
         :terrain :jungle
-        :infra #{}}))))
+        :infra #{}
+        :energy 0}))))
 
 (s/def ::location
   (s/with-gen
@@ -469,16 +545,20 @@
                                ::crop
                                ::wild?
                                ::ready?
-                               ::stores])
+                               ::stores
+                               ::energy])
       :forest (s/keys :req-un [::infra
                                ::flora
                                ::depleted?
-                               ::stores])
+                               ::stores
+                               ::energy])
       :swamp (s/keys :req-un [::infra
                               ::depleted?
-                              ::stores])
+                              ::stores
+                               ::energy])
       :basic  (s/keys :req-un [::infra
-                               ::stores])
+                               ::stores
+                               ::energy])
       :shortcut (s/keys :req-un [])))
     #(g/fmap init-location
              (s/gen terrains))))
@@ -487,6 +567,10 @@
   :args (s/cat :terrain terrains)
   :ret ::location)
 
+(s/def ::contact contacts)
+(s/def ::contacts (s/coll-of ::contact :kind set?))
+(s/def ::space-infra space-infra)
+(s/def ::space (s/coll-of ::space-infra :kind set?))
 (s/def ::resource resources)
 (s/def ::stores (s/map-of ::resource nat-int?))
 (s/def ::locations (s/coll-of ::location :min-count 1))
@@ -500,48 +584,45 @@
 (s/def ::month (s/and nat-int? (s/int-in 0 10000)))
 
 (defn gen-herd
-  ([]
-   (gen-herd
-    (rand-nth herd-names)
-    {:hunger 0
-     :sickness 0
-     :month 0}))
-  ([name* {:keys [hunger sickness month]
-           :or {hunger 0
-                sickness 0
-                month 0}}]
-   (let [herd {:name name*
+  ([& {:keys [name hunger sickness month individuals syndicates]
+       :or {name (rand-nth herd-names)
+            hunger 0
+            sickness 0
+            month 0}}]
+   (let [herd {:name name
                :hunger hunger
                :sickness sickness
                :month month}
-         individuals (gen-individuals herd (+ 40 (rand-int 20)))
-         {:keys [syndicates]}
-         (-> {:individuals individuals
-              :syndicates #{}}
-             (update :syndicates conj
-                     (set (take 2 (shuffle (vec skills)))))
-             add-syndicate)]
-     (gen-herd individuals syndicates herd)))
-  ([individuals syndicates base-herd]
-   (merge base-herd
-          {:individuals individuals
-           :syndicates syndicates
-           :stores (reduce
-                    (fn [all resource]
-                      (assoc all resource 0))
-                    {}
-                    resources)
-           :index 0
-           :path [[(init-location :plains)]
-                  [(init-location :forest)]
-                  [(init-location :mountain)]
-                  [(init-location :steppe)]
-                  [(init-location :swamp)]
-                  [(init-location :jungle)]]})))
+         individuals (or individuals
+                         (gen-individuals herd (+ 40 (rand-int 20))))
+         syndicates (or syndicates
+                        (-> {:individuals individuals
+                             :syndicates #{}}
+                            (update :syndicates conj
+                                    (set (take 2 (shuffle (vec skills)))))
+                            add-syndicate
+                            :syndicates))]
+     (merge herd
+            {:individuals individuals
+             :syndicates syndicates
+             :stores (reduce
+                      (fn [all resource]
+                        (assoc all resource 0))
+                      {}
+                      resources)
+             :index 0
+             :path [[(init-location :plains)]
+                    [(init-location :forest)]
+                    [(init-location :mountain)]
+                    [(init-location :steppe)]
+                    [(init-location :swamp)]
+                    [(init-location :jungle)]]}))))
 
 (s/def ::herd
   (s/with-gen
     (s/keys :req-un [::name
+                     ::contacts
+                     ::space
                      ::individuals
                      ::syndicates
                      ::stores
@@ -1191,3 +1272,36 @@
 
 (defn herd-has-skill [herd skill n]
   (<= n (collective-skill herd skill)))
+
+(defn count-infra
+  [herd infra]
+  (let [infra-count
+        (for [stage (:path herd)]
+          (for [location stage
+                :when (contains? (:infra location) infra)]
+            1))]
+    (reduce (partial reduce +) 0 infra-count)))
+
+(defn new-contact?
+  [herd]
+  (let [lodges (count-infra herd :lodge)]
+    (> lodges (* (inc (count (:contacts herd)))
+                 contact-rate))))
+
+(defn get-next-contact
+  [herd]
+  (let [n (count (:contacts herd))]
+    (cond
+      (< n (count early-contacts))
+      (rand-nth (reduce disj early-contacts (:contacts herd)))
+      (< n (+ (count early-contacts)
+              (count mid-contacts)))
+      (rand-nth (reduce disj mid-contacts (:contacts herd)))
+      (< n (+ (count early-contacts)
+              (count mid-contacts)
+              (count late-contacts)))
+      (rand-nth (reduce disj late-contacts (:contacts herd))))))
+
+(s/fdef get-next-contact
+  :args (s/cat :herd ::herd)
+  :ret (s/nilable ::contact))

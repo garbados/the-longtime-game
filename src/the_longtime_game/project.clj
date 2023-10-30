@@ -272,7 +272,10 @@
      :uses [:herbalism]
      :filter {:terrain :forest
               :stores {:rations 50}
-              :skills {:herbalism 50}}
+              :skills {:herbalism 50}
+              :filter-fn
+              (fn [herd location]
+                (core/herd-has-skill herd :herbalism (* 100 (:flora location))))}
      :location-effect
      (fn [location]
        (update location :flora inc))}
@@ -283,6 +286,7 @@
                             1/2
                             :infra :monsoon-bellows)
         (assoc-in [:filter :season] 2)
+        (assoc-in [:filter :stores :wood] 50)
         (assoc :name "Smelt metal"
                :filter-fn
                (fn [herd _]

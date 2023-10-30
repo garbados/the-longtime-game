@@ -17,3 +17,35 @@ Journeying may also refer any migratory commitment a minot makes to a herd, and 
 When you visit a location, after its event, a description is generated from three elements. One of them is terrain-related, and two are generated from traits in the herd. That is, two *moments* occur, which pair a character selector with a short text blurb.
 
 The location blurb uses a function to map the location into a *remark*, which involves no characters. This may comment on the plains being grassy, a building existing, or the absence of buildings.
+
+## Regarding Lodges
+
+A lodge requires wood, stone, and tools, but mostly wood. They seem meaningless until you have several, and then several more. With enough lodges, complex relationships to the species lodging there will emerge, and *contact events* will play. Which people you contact will vary based on how many you have already contacted.
+
+Early contacts:
+
+- Auter: *Pluriversity*
+- Harp: *Flying-market*
+- Felidar: *Chargepot-generator*
+- Er'sol: *Eldermothertree*
+
+Mid contacts
+
+- Dod: *Mag-launchpad*
+- Saurek: *Port-cove*
+
+Late contacts
+
+- Haroot: *Launch shipyard requisites*
+- Rak: *Atomic-reactor*
+- Dabulan: *Launch ringworld requisites*
+
+Within each tier, the next contact is random.
+
+Each contacted People provides a few buildings:
+
+Auter:
+
+- Pluriversity: A permanent institute for study and enrichment. Provides fulfillment to passing herds.
+- ???
+
