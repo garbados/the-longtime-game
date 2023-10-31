@@ -45,13 +45,13 @@
                  :port-cove
                  :quarry
                  :stadium
-                 :stonetower-battery
+                 :stonetower-batteries
                  :temple
                  :wind-forge
                  :workshop})
 
 (def early-contacts #{:auter
-                      :hard
+                      :harp
                       :felidar
                       :er-sol})
 
@@ -67,10 +67,10 @@
                                 late-contacts]))
 
 (def space-infra #{:probe
-             :station
-             :shipyard
-             :ringworld
-             :mobile-ringworld})
+                   :station
+                   :shipyard
+                   :ringworld
+                   :mobile-ringworld})
 
 (def traits #{:angry
               :kind
@@ -121,7 +121,8 @@
   ["They of One Thousand Oaks"
    "Kin of the Season-Wheel"
    "Brash-Mane Stampede"
-   "They of Horn and Thorn"])
+   "They of Horn and Thorn"
+   "Staid-Hoof Kith"])
 
 (def skill-ranks ["unfamiliar"
                   "novice"
@@ -175,43 +176,6 @@
    2 "fall"
    3 "winter"})
 
-(def buildings-info
-  (reduce
-   (fn [all building-info]
-     (assoc all (:name building-info) building-info))
-   {}
-   [{:name :atomic-reactor
-     :description "A steam turbine powered by the heat of decaying isotopes."
-     :detail "Produces energy each month."
-     :uses [:geology]
-     :filter
-     {:skills {:geology 500 :craftwork 500}
-      :stores {:stone 300 :metal 1000 :tools 500}}
-     :filter-fn
-     (fn [herd _]
-       (contains? (:contacts herd) :rak))}
-    {:name :chargepot-generator
-     :description "A vat of chemicals that binds solar heat to unstable polymers."
-     :detail "Produces energy each summer."
-     :uses [:geology]
-     :filter
-     {:skills {:geology 200 :craftwork 200}
-      :stores {:stone 200 :metal 200 :tools 100}}
-     :filter-fn
-     (fn [herd _]
-       (contains? (:contacts herd) :felidar))}
-    {:name :eldermothertree
-     :description "A venerated oldgrowth, shaped and loved."
-     :detail "Raises the forest's flora each winter."
-     :uses [:herbalism]
-     :filter
-     {:skills {:herbalism 200 :craftwork 200}
-      :stores {:wood 300 :rations 150 :poultices 100}}}]))
-
-(defn building-name
-  [building-info]
-  (string/capitalize (name (:name building-info))))
-
 (def first-syllable
   ["Il" "Ol" "Ib" "Ak"
    "Li" "El" "Et" "Uk"
@@ -241,10 +205,10 @@
                              :max-count (inc max-passions)))
 (s/def ::skill skills)
 (s/def ::skills (s/map-of ::skill (s/int-in 0 (inc max-skill))))
-(s/def ::uses (s/coll-of ::skill))
+(s/def ::uses (s/coll-of skills :distinct true))
 (s/def ::trait traits)
 (s/def ::traits (s/coll-of ::trait :kind set?))
-(s/def ::fulfillment (s/int-in 0 (+ 1 max-fulfillment)))
+(s/def ::fulfillment (s/int-in 0 (inc max-fulfillment)))
 
 (defn inc-some-skill [skills*]
   (let [skill (rand-nth (vec skills))
@@ -1052,8 +1016,6 @@
 (s/fdef inc-month
   :args (s/cat :herd ::herd)
   :ret ::herd)
-
-(s/def ::uses (s/coll-of skills :distinct true))
 
 (defn gains-experience?
   [used syndicates {:keys [passions skills]}]
