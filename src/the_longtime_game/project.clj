@@ -353,7 +353,7 @@
 (s/def ::skills (s/map-of ::core/skill pos-int?))
 (s/def ::filter
   (s/keys :opt-un [::core/season
-                   ::terrain
+                   ::core/terrain
                    ::skills
                    ::core/stores]))
 (s/def ::filter-fn

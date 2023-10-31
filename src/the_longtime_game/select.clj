@@ -7,6 +7,8 @@
                                  ::core/season
                                  ::core/terrain]))
 
+;; other filter ideas: contacts, space, buildings
+
 (defn passes-filter [herd {:keys [skills stores season terrain]}]
   (and (if terrain
          (= (:terrain (core/current-location herd)) terrain)
