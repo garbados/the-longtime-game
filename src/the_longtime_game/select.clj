@@ -14,18 +14,28 @@
   (s/or :one core/buildings
         :many ::core/infra))
 
+(s/def ::power pos-int?)
+
 (s/def ::filter (s/keys :opt-un [::core/skills
                                  ::core/stores
                                  ::core/season
                                  ::core/terrain
                                  ::contacts
                                  ::space
-                                 ::infra]))
+                                 ::infra
+                                 ::power]))
 
 ;; other filter ideas: contacts, space, buildings
 
-(defn passes-filter
-  [herd {:keys [skills stores season terrain contacts space infra]}]
+(defn passes-filter?
+  [herd {:keys [skills
+                stores
+                season
+                terrain
+                contacts
+                space
+                infra
+                power]}]
   (and (if terrain
          (= (:terrain (core/current-location herd)) terrain)
          true)
@@ -58,6 +68,10 @@
              :one (contains? (:space herd) x)
              :many (nil? (seq (reduce disj x (:space herd))))))
          true)
+       (if power
+         (let [location (core/current-location herd)]
+           (>= (:power location) power))
+         true)
        (reduce
         (fn [ok? [skill required]]
           (and ok?
@@ -66,7 +80,7 @@
         true
         (or skills {}))))
 
-(s/fdef passes-filter
+(s/fdef passes-filter?
   :args (s/cat :herd ::core/herd
                :filter ::filter)
   :ret boolean?)
@@ -89,7 +103,7 @@
                                  ::passions
                                  ::age]))
 
-(defn passes-select
+(defn passes-select?
   [herd individual {:keys [traits skills fulfillment passions age]}]
   (and (if traits
          (every? some? (for [trait traits]
@@ -116,7 +130,7 @@
              :comp ((first x) (:passions individual) (second x))))
          true)))
 
-(s/fdef passes-select
+(s/fdef passes-select?
   :args (s/cat :herd ::core/herd
                :individual ::core/individual
                :select ::select)
@@ -126,7 +140,7 @@
   [herd select]
   (seq
    (filter
-    #(passes-select herd % select)
+    #(passes-select? herd % select)
     (:individuals herd))))
 
 (s/fdef find-individuals
@@ -151,3 +165,65 @@
   :args (s/cat :herd ::core/herd
                :selects (s/coll-of ::select))
   :ret (s/nilable ::core/individualsi))
+
+(comment
+;; archived metadata regarding some buildings
+  (map
+   (fn [[infra skill required-skill stores terrain]]
+     (construction-project infra skill required-skill stores terrain))
+   [[:granary
+     :herbalism
+     10
+     {:wood 10 :stone 10 :tools 10}]
+    [:stadium
+     :athletics
+     20
+     {:wood 20 :tools 10}]
+    [:observatory
+     :organizing
+     50
+     {:wood 10 :stone 10 :tools 10}
+     :mountain]
+    [:quarry
+     :geology
+     50
+     {:wood 10 :stone 50 :tools 20}]
+    [:kitchen
+     :medicine
+     20
+     {:wood 10 :stone 10 :tools 10}]
+    [:workshop
+     :craftwork
+     20
+     {:wood 10 :stone 10 :tools 10}]
+    [:wind-forge
+     :craftwork
+     50
+     {:wood 100 :stone 100 :tools 100}
+     :jungle]
+    [:monsoon-bellows
+     :craftwork
+     75
+     {:bone 100 :stone 100 :tools 100}
+     :jungle]
+    [:temple
+     :organizing
+     100
+     {:wood 100 :stone 100 :tools 100}]
+    [:hospital
+     :medicine
+     50
+     {:wood 10 :stone 10 :tools 10}]
+    [:quern-generator
+     :craftwork
+     150
+     {:wood 10 :stone 100 :metal 100 :tools 50}]
+    [:hydroweight-battery
+     :craftwork
+     175
+     {:wood 50 :stone 200 :metal 150 :tools 50}]
+    [:mag-forge
+     :craftwork
+     200
+     {:wood 50 :stone 200 :metal 300 :tools 100}]])
+  )

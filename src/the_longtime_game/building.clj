@@ -7,6 +7,9 @@
 (s/def ::name ::core/building)
 (s/def ::description string?)
 (s/def ::detail string?)
+(s/def ::uses
+  (s/or :set ::core/uses
+        :one core/skills))
 (s/def ::filter-fn
   (s/fspec :args (s/cat :herd ::core/herd)
            :ret boolean?))
@@ -17,9 +20,9 @@
 (s/def ::building-info
   (s/keys :req-un [::name
                    ::description
-                   ::detail]
-          :opt-un [::core/uses
-                   ::select/filter
+                   ::detail
+                   ::select/filter]
+          :opt-un [::uses
                    ::filter-fn
                    ::text-fn]))
 
@@ -31,7 +34,7 @@
    [{:name :atomic-reactor
      :description "A steam turbine powered by the heat of decaying isotopes."
      :detail "Produces energy each month."
-     :uses [:geology]
+     :uses :geology
      :filter
      {:skills {:geology 500 :craftwork 500}
       :stores {:stone 300 :metal 1000 :tools 500}
@@ -39,7 +42,7 @@
     {:name :chargepot-generator
      :description "A vat of chemicals that binds solar rays to unstable polymers."
      :detail "Produces energy each summer."
-     :uses [:geology]
+     :uses :geology
      :filter
      {:skills {:geology 200 :craftwork 200}
       :stores {:stone 200 :metal 200 :tools 100}
@@ -47,7 +50,7 @@
     {:name :eldermothertree
      :description "A venerated oldgrowth, shaped and loved."
      :detail "Raises the forest's flora each winter."
-     :uses [:herbalism]
+     :uses :herbalism
      :filter
      {:skills {:herbalism 200 :craftwork 200}
       :stores {:wood 300 :rations 150 :poultices 100}
@@ -55,7 +58,7 @@
     {:name :flyer-market
      :description "A market for birds and friends of birds."
      :detail "Exchange resources in an orchestrated hierarchy."
-     :uses [:organizing]
+     :uses :organizing
      :filter
      {:skills {:organizing 150 :craftwork 100}
       :stores {:wood 200 :stone 100 :tools 50}
@@ -63,19 +66,30 @@
     {:name :granary
      :description "An expansive earthen cellar, for storing perishables."
      :detail "Stores food and keeps it safe for your next visit."
-     :uses [:herbalism]
+     :uses :herbalism
      :filter
      {:stores {:wood 10 :stone 10 :tools 10}
       :skills {:herbalism 10 :craftwork 10}}}
     {:name :hospital
      :description "A well-equipped house of healing."
-     :detail "Improves the production of poultices."}
+     :detail "Improves the production of poultices."
+     :uses :medicine
+     :filter
+     {:stores {:wood 10 :stone 10 :tools 10}
+      :skills {:medicine 50 :craftwork 50}}}
     {:name :kitchen
      :description "A public commissary and gathering hall."
-     :detail "Improves the production of rations."}
+     :detail "Improves the production of rations."
+     :uses :medicine
+     :filter
+     {:stores {:wood 10 :stone 10 :tools 10}
+      :skills {:medicine 20 :craftwork 20}}}
     {:name :lodge
      :description "An earthen shrine, fit for passing spirits and critters."
-     :detail "Safe homes become the dwelling places of strange allies."}
+     :detail "Safe homes become the dwelling places of strange allies."
+     :uses :organizing
+     :filter
+     {:stores {:wood 300 :stone 100 :tools 50}}}
     {:name :mag-launchpad
      :description "A rail-acceleration system which launches a payload beyond the gravity well."
      :detail "Enables further development of space."}
@@ -96,7 +110,8 @@
      :detail "Resources stored here will gain interest, as the clans practice giftright."}
     {:name :quarry
      :description "A valley carved from earth and stone. A pit with a river-drain."
-     :detail "Improves the gathering of stone."}
+     :detail "Improves the gathering of stone."
+     :filter {:terrain :mountain}}
     {:name :stadium
      :description "A great arena for displays and contests of bodily and theatric excellence!"
      :detail "Improves the fulfillment of festivals."}
@@ -127,7 +142,7 @@
   [herd building]
   (let [{:keys [filter filter-fn]} (building->info building)]
     (and (if filter
-           (select/passes-filter herd filter)
+           (select/passes-filter? herd filter)
            true)
          (if filter-fn
            (filter-fn herd)

@@ -413,7 +413,7 @@
               (keys name->candidate))
         candidate (name->candidate name)]
     [(update info :projects conj name)
-     (project/enact-project herd candidate)]))
+     (project/do-project herd candidate)]))
 
 (defn select-month-projects
   [info herd]

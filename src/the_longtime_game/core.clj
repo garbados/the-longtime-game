@@ -647,6 +647,18 @@
                :location ::location)
   :ret ::herd)
 
+(defn update-current-location
+  [herd f & args]
+  (let [location (current-location herd)
+        location* (apply f location args)]
+    (assoc-location herd location*)))
+
+(s/fdef update-current-location
+  :args (s/cat :herd ::herd
+               :f ifn?
+               :rest (s/* any?))
+  :ret ::herd)
+
 (defn shift-population
   [{:keys [hunger sickness] :as herd}]
   (let [population (-> herd :individuals count)
