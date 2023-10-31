@@ -41,11 +41,3 @@ Late contacts
 - Dabulan: *Launch ringworld requisites*
 
 Within each tier, the next contact is random.
-
-Each contacted People provides a few buildings:
-
-Auter:
-
-- Pluriversity: A permanent institute for study and enrichment. Provides fulfillment to passing herds.
-- ???
-

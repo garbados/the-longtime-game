@@ -2,14 +2,30 @@
   (:require [clojure.spec.alpha :as s]
             [the-longtime-game.core :as core]))
 
+(s/def ::contacts
+  (s/or :one ::core/contacts
+        :many ::core/contacts))
+
+(s/def ::space
+  (s/or :one core/space-infra
+        :many ::core/space))
+
+(s/def ::infra
+  (s/or :one core/buildings
+        :many ::core/infra))
+
 (s/def ::filter (s/keys :opt-un [::core/skills
                                  ::core/stores
                                  ::core/season
-                                 ::core/terrain]))
+                                 ::core/terrain
+                                 ::contacts
+                                 ::space
+                                 ::infra]))
 
 ;; other filter ideas: contacts, space, buildings
 
-(defn passes-filter [herd {:keys [skills stores season terrain]}]
+(defn passes-filter
+  [herd {:keys [skills stores season terrain contacts space infra]}]
   (and (if terrain
          (= (:terrain (core/current-location herd)) terrain)
          true)
@@ -23,6 +39,25 @@
                  (>= amount required))))
         true
         (or stores {}))
+       (if (and contacts (s/valid? ::contacts contacts))
+         (let [[kind x] (s/conform ::contacts contacts)]
+           (case kind
+             :one (contains? (:contacts herd) x)
+             :many (nil? (seq (reduce disj x (:contacts herd))))))
+         true)
+       (if (and infra (s/valid? ::infra infra))
+         (let [[kind x] (s/conform ::infra infra)
+               location (core/current-location herd)]
+           (case kind
+             :one (contains? (:infra location) x)
+             :many (nil? (seq (reduce disj x (:infra location))))))
+         true)
+       (if (and space (s/valid? ::space space))
+         (let [[kind x] (s/conform ::space space)]
+           (case kind
+             :one (contains? (:space herd) x)
+             :many (nil? (seq (reduce disj x (:space herd))))))
+         true)
        (reduce
         (fn [ok? [skill required]]
           (and ok?

@@ -34,36 +34,32 @@
      :uses [:geology]
      :filter
      {:skills {:geology 500 :craftwork 500}
-      :stores {:stone 300 :metal 1000 :tools 500}}
-     :filter-fn
-     #(contains? (:contacts %) :rak)}
+      :stores {:stone 300 :metal 1000 :tools 500}
+      :contacts :rak}}
     {:name :chargepot-generator
      :description "A vat of chemicals that binds solar rays to unstable polymers."
      :detail "Produces energy each summer."
      :uses [:geology]
      :filter
      {:skills {:geology 200 :craftwork 200}
-      :stores {:stone 200 :metal 200 :tools 100}}
-     :filter-fn
-     #(contains? (:contacts %) :felidar)}
+      :stores {:stone 200 :metal 200 :tools 100}
+      :contacts :felidar}}
     {:name :eldermothertree
      :description "A venerated oldgrowth, shaped and loved."
      :detail "Raises the forest's flora each winter."
      :uses [:herbalism]
      :filter
      {:skills {:herbalism 200 :craftwork 200}
-      :stores {:wood 300 :rations 150 :poultices 100}}
-     :filter-fn
-     #(contains? (:contacts %) :er-sol)}
+      :stores {:wood 300 :rations 150 :poultices 100}
+      :contacts :er-sol}}
     {:name :flyer-market
      :description "A market for birds and friends of birds."
      :detail "Exchange resources in an orchestrated hierarchy."
      :uses [:organizing]
      :filter
      {:skills {:organizing 150 :craftwork 100}
-      :stores {:wood 200 :stone 100 :tools 50}}
-     :filter-fn
-     #(contains? (:contacts %) :harp)}
+      :stores {:wood 200 :stone 100 :tools 50}
+      :contacts :harp}}
     {:name :granary
      :description "An expansive earthen cellar, for storing perishables."
      :detail "Stores food and keeps it safe for your next visit."
@@ -71,21 +67,51 @@
      :filter
      {:stores {:wood 10 :stone 10 :tools 10}
       :skills {:herbalism 10 :craftwork 10}}}
-    {:name :hospital}
-    {:name :kitchen}
-    {:name :lodge}
-    {:name :mag-launchpad}
-    {:name :monsoon-bellows}
-    {:name :observatory}
-    {:name :quern-generator}
-    {:name :pluriversity}
-    {:name :port-cove}
-    {:name :quarry}
-    {:name :stadium}
-    {:name :stonetower-batteries}
-    {:name :temple}
-    {:name :wind-forge}
-    {:name :workshop}]))
+    {:name :hospital
+     :description "A well-equipped house of healing."
+     :detail "Improves the production of poultices."}
+    {:name :kitchen
+     :description "A public commissary and gathering hall."
+     :detail "Improves the production of rations."}
+    {:name :lodge
+     :description "An earthen shrine, fit for passing spirits and critters."
+     :detail "Safe homes become the dwelling places of strange allies."}
+    {:name :mag-launchpad
+     :description "A rail-acceleration system which launches a payload beyond the gravity well."
+     :detail "Enables further development of space."}
+    {:name :monsoon-bellows
+     :description "Articulated flumes to swallow the monsoon winds."
+     :detail "Improves the smelting of metal with a Wind Forge."}
+    {:name :observatory
+     :description "A protected spire upon the mountain, fitted with looking-glass equipment."
+     :detail "Improves the fulfillment of stargazing."}
+    {:name :quern-generator
+     :description "A system of high-resistance rotary turbines, which volunteers turn to generate electricity."
+     :detail "Turns time into power."}
+    {:name :pluriversity
+     :description "A scholastic order's manorly home, devoted to the currying of expertise."
+     :detail "Improves the rate of learning skills."}
+    {:name :port-cove
+     :description "A sculpted stone quay, a permanent harbor for sailing clans."
+     :detail "Resources stored here will gain interest, as the clans practice giftright."}
+    {:name :quarry
+     :description "A valley carved from earth and stone. A pit with a river-drain."
+     :detail "Improves the gathering of stone."}
+    {:name :stadium
+     :description "A great arena for displays and contests of bodily and theatric excellence!"
+     :detail "Improves the fulfillment of festivals."}
+    {:name :stonetower-batteries
+     :description "A system of cranes suspending columns of rock, which stores potential energy in the suspension."
+     :detail "Allows power to persist and accumulate."}
+    {:name :temple
+     :description "A hallowed place, rendered sacred by many hands."
+     :detail "Reduces fulfillment decay."}
+    {:name :wind-forge
+     :description "A charcoal furnace that uses monsoon winds to burn hot enough to work high-quality metals."
+     :detail "Allows the smelting of metal from ore during monsoon season (fall)."}
+    {:name :workshop
+     :description "The craftsperson's complete depot and tool library."
+     :detail "Improves the manufacturing of tools."}]))
 
 (defn building->name
   [building]
