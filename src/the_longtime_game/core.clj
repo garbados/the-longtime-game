@@ -37,6 +37,7 @@
                  :hospital
                  :kitchen
                  :lodge
+                 :mag-forge
                  :mag-launchpad
                  :monsoon-bellows
                  :observatory

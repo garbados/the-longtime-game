@@ -90,12 +90,19 @@
      :uses :organizing
      :filter
      {:stores {:wood 300 :stone 100 :tools 50}}}
+    {:name :mag-forge
+     :description "Automated forge using electro-magnets to purify metals."
+     :detail "Use power to smelt metal."
+     :filter
+     {:stores {:metal 500 :tools 500}
+      :skills {:craftwork 700}}}
     {:name :mag-launchpad
      :description "A rail-acceleration system which launches a payload beyond the gravity well."
      :detail "Enables further development of space."
      :filter
      {:stores {:metal 1000 :tools 1000}
-      :skills {:craftwork 1000}}}
+      :skills {:craftwork 1000}
+      :contacts :dod}}
     {:name :monsoon-bellows
      :description "Articulated flumes to swallow the monsoon winds."
      :detail "Improves the smelting of metal with a Wind Forge."
@@ -112,13 +119,27 @@
       :terrain :mountain}}
     {:name :quern-generator
      :description "A system of high-resistance rotary turbines, which volunteers turn to generate electricity."
-     :detail "Turns time into power."}
+     :detail "Turns time into power."
+     :uses :geology
+     :filter
+     {:stores {:stone 350 :metal 200 :tools 100}
+      :skills {:craftwork 150 :geology 100}}}
     {:name :pluriversity
      :description "A scholastic order's manorly home, devoted to the currying of expertise."
-     :detail "Improves the rate of learning skills."}
+     :detail "Improves the rate of learning skills."
+     :uses :organizing
+     :filter
+     {:stores {:wood 200 :stone 200 :tools 100}
+      :skills {:craftwork 100 :organizing 100}
+      :contacts :auter}}
     {:name :port-cove
      :description "A sculpted stone quay, a permanent harbor for sailing clans."
-     :detail "Resources stored here will gain interest, as the clans practice giftright."}
+     :detail "Resources stored here will gain interest, as the clans practice giftright."
+     :uses :organizing
+     :filter
+     {:stores {:wood 200 :stone 200 :tools 100}
+      :skills {:craftwork 100 :organizing 100}
+      :contacts :saurek}}
     {:name :quarry
      :description "A valley carved from earth and stone. A pit with a river-drain."
      :detail "Improves the gathering of stone."
@@ -129,19 +150,38 @@
       :terrain :mountain}}
     {:name :stadium
      :description "A great arena for displays and contests of bodily and theatric excellence!"
-     :detail "Improves the fulfillment of festivals."}
+     :detail "Improves the fulfillment of festivals."
+     :uses :athletics
+     :filter
+     {:stores {:wood 20 :tools 10}
+      :skills {:craftwork 20 :athletics 20}}}
     {:name :stonetower-batteries
-     :description "A system of cranes suspending columns of rock, which stores potential energy in the suspension."
-     :detail "Allows power to persist and accumulate."}
+     :description "Cranes suspending columns of rock, storing potential energy in the suspension."
+     :detail "Allows power to persist and accumulate."
+     :uses :geology
+     :filter
+     {:stores {:stone 500 :tools 100}
+      :skills {:craftwork 200 :geology 200}}}
     {:name :temple
      :description "A hallowed place, rendered sacred by many hands."
-     :detail "Reduces fulfillment decay."}
+     :detail "Reduces fulfillment decay."
+     :uses :organizing
+     :filter
+     {:stores {:wood 200 :stone 200 :tools 50}
+      :skills {:craftwork 100 :organizing 100}}}
     {:name :wind-forge
      :description "A charcoal furnace that uses monsoon winds to burn hot enough to work high-quality metals."
-     :detail "Allows the smelting of metal from ore during monsoon season (fall)."}
+     :detail "Allows the smelting of metal from ore during monsoon season (fall)."
+     :filter
+     {:stores {:wood 100 :stone 100 :tools 100}
+      :skills {:craftwork 50}
+      :terrain :jungle}}
     {:name :workshop
      :description "The craftsperson's complete depot and tool library."
-     :detail "Improves the manufacturing of tools."}]))
+     :detail "Improves the manufacturing of tools."
+     :filter
+     {:stores {:wood 10 :stone 10 :tools 10}
+      :skills {:craftwork 20}}}]))
 
 (defn building->name
   [building]
