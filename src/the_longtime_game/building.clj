@@ -92,13 +92,24 @@
      {:stores {:wood 300 :stone 100 :tools 50}}}
     {:name :mag-launchpad
      :description "A rail-acceleration system which launches a payload beyond the gravity well."
-     :detail "Enables further development of space."}
+     :detail "Enables further development of space."
+     :filter
+     {:stores {:metal 1000 :tools 1000}
+      :skills {:craftwork 1000}}}
     {:name :monsoon-bellows
      :description "Articulated flumes to swallow the monsoon winds."
-     :detail "Improves the smelting of metal with a Wind Forge."}
+     :detail "Improves the smelting of metal with a Wind Forge."
+     :filter
+     {:stores {:bone 100 :stone 100 :tools 100}
+      :skills {:craftwork 75}
+      :terrain :jungle}}
     {:name :observatory
      :description "A protected spire upon the mountain, fitted with looking-glass equipment."
-     :detail "Improves the fulfillment of stargazing."}
+     :detail "Improves the fulfillment of stargazing."
+     :filter
+     {:stores {:wood 10 :stone 10 :tools 10}
+      :skills {:craftwork 75}
+      :terrain :mountain}}
     {:name :quern-generator
      :description "A system of high-resistance rotary turbines, which volunteers turn to generate electricity."
      :detail "Turns time into power."}
@@ -111,7 +122,11 @@
     {:name :quarry
      :description "A valley carved from earth and stone. A pit with a river-drain."
      :detail "Improves the gathering of stone."
-     :filter {:terrain :mountain}}
+     :uses :geology
+     :filter
+     {:stores {:wood 10 :stone 50 :tools 20}
+      :skills {:craftwork 50 :geology 50}
+      :terrain :mountain}}
     {:name :stadium
      :description "A great arena for displays and contests of bodily and theatric excellence!"
      :detail "Improves the fulfillment of festivals."}

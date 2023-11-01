@@ -140,7 +140,7 @@
 (def max-skill (count skill-ranks))
 (def max-fulfillment 100)
 (def max-passions 3)
-(def experience-rate 10)
+(def experience-rate 20)
 (def passion-rate 10)
 (def fulfillment-rate 10)
 (def fulfillment-decay 1)
@@ -149,7 +149,7 @@
 (def org-multiplier 2)
 (def hunger-rate 1/3)
 (def sickness-rate 1/4)
-(def contact-rate 3)
+(def contact-rate 2)
 
 (def crop->nutrients
   {:grapplewheat #{:n :k}
@@ -234,11 +234,10 @@
 (defn becomes-passionate?
   [used {:keys [passions]}]
   (when (> max-passions (count passions))
-    (let [candidates (filter (partial (complement contains?) passions) used)]
-      (when (seq candidates)
-        (let [chance (rand-int (int (* passion-rate (count candidates))))]
-          (when (< chance (count candidates))
-            (nth candidates chance)))))))
+    (when-let [candidates (seq (filter #(nil? (contains? passions %)) used))]
+      (let [chance (rand-int (int (* passion-rate (count candidates))))]
+        (when (< chance (count candidates))
+          (nth candidates chance))))))
 
 (s/fdef becomes-passionate?
   :args (s/cat :used ::uses
@@ -1034,13 +1033,11 @@
   (let [used* (filter #(> max-skill (get skills %)) used)
         syndicate-counts (frequencies (reduce into syndicates []))
         syndicate-bonus #(get syndicate-counts % 0)
-        passion-bonus #(if (contains? passions %) 1 0)]
+        passion-bonus #(if (contains? passions %) 2 0)]
     (first
      (filter
       (fn [skill]
-        (let [bonus (+ 1
-                       (syndicate-bonus skill)
-                       (passion-bonus skill))
+        (let [bonus (+ 1 (syndicate-bonus skill) (passion-bonus skill))
               roll (rand-int experience-rate)]
           (>= bonus roll)))
       used*))))
@@ -1258,24 +1255,54 @@
 
 (defn new-contact?
   [herd]
-  (let [lodges (count-infra herd :lodge)]
-    (> lodges (* (inc (count (:contacts herd)))
-                 contact-rate))))
+  (let [n (count (:contacts herd))]
+    (> (count-infra herd :lodge)
+       (+ n contact-rate
+          (Math/pow n contact-rate)))))
+
+;; 0 => 2
+;; 1 => (1 + 2 + 1^2) => 4
+;; 2 => (2 + 2 + 2^2) => 8
+;; 3 => (2 + 2 + 3^2) => 13
+;; 4 => (4 + 2 + 4^2) => 22
+;; 5 => (7 + 25) => 32
+;; 6 => (8 + 36) => 44
+;; 7 => (9 + 49) => 58
+;; 8 => (10 + 64) => 74
+;; 9 => (11 + 81) => 92
 
 (defn get-next-contact
   [herd]
   (let [n (count (:contacts herd))]
     (cond
       (< n (count early-contacts))
-      (rand-nth (reduce disj early-contacts (:contacts herd)))
+      (rand-nth (vec (reduce disj early-contacts (:contacts herd))))
       (< n (+ (count early-contacts)
               (count mid-contacts)))
-      (rand-nth (reduce disj mid-contacts (:contacts herd)))
+      (rand-nth (vec (reduce disj mid-contacts (:contacts herd))))
       (< n (+ (count early-contacts)
               (count mid-contacts)
               (count late-contacts)))
-      (rand-nth (reduce disj late-contacts (:contacts herd))))))
+      (rand-nth (vec (reduce disj late-contacts (:contacts herd)))))))
 
 (s/fdef get-next-contact
   :args (s/cat :herd ::herd)
   :ret (s/nilable ::contact))
+
+(defn herd-has-nutrition?
+  [herd n]
+  (>= (+ (get-in herd [:stores :food] 0)
+         (get-in herd [:stores :rations] 0))
+      n))
+
+(defn consume-nutrition
+  [herd n]
+  (let [remaining-food (- (get-in herd [:stores :food] 0) n)
+        remaining-rations
+        (if (< remaining-food 0)
+          (+ (get-in herd [:stores :rations] 0)
+             remaining-food)
+          (get-in herd [:stores :rations]))]
+    (-> herd
+        (assoc-in [:stores :food] (max 0 remaining-food))
+        (assoc-in [:stores :rations] (max 0 remaining-rations)))))

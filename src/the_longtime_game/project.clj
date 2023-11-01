@@ -6,11 +6,22 @@
             [the-longtime-game.core :as core]
             [the-longtime-game.select :as select]))
 
-(def base-need base-need)
+(def base-need 50)
 
 (defn skill->multiplier
   [skill-amount]
   (+ 1 (/ skill-amount 100)))
+
+(def flora-bonus
+  #(:flora (core/current-location %)))
+
+(def flora-filter
+  #(let [location (core/current-location %)]
+     (and (> (:flora location 0) 0)
+          (false? (:depleted? location)))))
+
+(def deplete-land
+  #(assoc % :depleted? true))
 
 (def construction-projects
   (for [[name*
@@ -57,63 +68,6 @@
              :let [amount (int (* x n modifier infra-bonus bonus))]]
          [resource amount])))))
 
-(def gathering-projects
-  (let [flora-bonus #(:flora (core/current-location %))
-        flora-filter
-        (fn [herd]
-          (let [location (core/current-location herd)]
-            (and (> (:flora location 0) 0)
-                 (false? (:depleted? location)))))
-        deplete-land #(assoc % :depleted? true)]
-    [{:name "Gather deadfall"
-      :uses [:herbalism]
-      :filter {:terrain :forest}
-      :filter-fn flora-filter
-      :effect
-      (gather-factory base-need [[:wood 1]
-                                    [:bone 1/2]]
-                                :bonus-fn flora-bonus)
-      :location-effect deplete-land}
-     {:name "Eat the land"
-      :uses [:herbalism]
-      :filter {:terrain :forest}
-      :filter-fn flora-filter
-      :effect
-      (gather-factory 100 [[:food 1]]
-                                :bonus-fn flora-bonus)
-      :location-effect deplete-land}
-     {:name "Gather bog-iron"
-      :uses [:geology]
-      :filter {:terrain :swamp}
-      :filter-fn
-      #(false? (:depleted? (core/current-location %)))
-      :effect
-      (gather-factory base-need [[:ore 1]])
-      :location-effect
-      (fn [location]
-        (assoc location :depleted? true))}
-     {:name "Gather stones"
-      :uses [:geology]
-      :effect
-      (gather-factory base-need [[:stone 1]
-                                 [:ore 1/10]]
-                      :infra :quarry)}
-     {:name "Graze"
-      :uses [:herbalism]
-      :effect
-      (gather-factory base-need [[:food 1]]
-                      :bonus-fn
-                      (fn [herd]
-                        (if (= 3 (core/get-season herd))
-                          1/2
-                          1)))}
-     {:name "Spelunk"
-      :uses [:athletics :geology]
-      :filter {:terrain :mountain
-               :stores {:tools 5}}
-      :effect
-      (gather-factory base-need [[:ore 1]])}]))
-
 (def planting-projects
   (for [crop core/crops
         :let [[nutrients amount] (core/crop-info crop)
@@ -138,36 +92,6 @@
                   :wild? false
                   :ready? false)))}))
 
-(def production-projects
-  [{:name "Prepare poultices"
-    :uses [:medicine]
-    :filter {:stores {:food base-need}}
-    :effect
-    (gather-factory base-need [[:poultices 1/2]]
-                    :infra :hospital)}
-   {:name "Cook rations"
-    :uses [:medicine]
-    :filter {:stores {:food base-need}}
-    :effect
-    (gather-factory base-need [[:rations 1]]
-                    :infra :kitchen)}
-   {:name "Smelt metal"
-    :uses [:craftwork]
-    :filter {:season 2
-             :stores {:wood base-need :ore base-need}}
-    :filter-fn
-    #(core/local-infra? % :wind-forge)
-    :effect
-    (gather-factory base-need [[:metal 1/2]]
-                    :infra :monsoon-bellows)}
-   {:name "Mag-smelt metal"
-    :filter {:power 1
-             :stores {:ore base-need}}
-    :filter-fn
-    #(core/local-infra? % :mag-forge)
-    :effect
-    (gather-factory base-need [[:metal 1]])}])
-
 (def manufacturing-projects
   (for [[resource x] [[:stone 1]
                       [:bone  2]
@@ -183,21 +107,21 @@
   (concat
    construction-projects
    planting-projects
-   gathering-projects
-   production-projects
    manufacturing-projects
-   [{:name "Explore"
-     :uses [:organizing]
-     :filter {:skills {:organizing 20}}
-     :filter-fn
-     (fn [herd]
-       (>= 3 (count (second (:path herd)))))
+   [{:name "Cook rations"
+     :uses [:medicine]
+     :filter {:stores {:food base-need}}
      :effect
-     (fn [herd _]
-       (let [terrains (set (map :terrain (get-in herd [:path 1])))
-             ok-terrains (filter (complement terrains) core/terrains)
-             location (-> ok-terrains vec rand-nth core/init-location)]
-         (update-in herd [:path 1] conj location)))}
+     (gather-factory base-need [[:rations 1]]
+                     :infra :kitchen)}
+    {:name "Eat the land"
+     :uses [:herbalism]
+     :filter {:terrain :forest}
+     :filter-fn flora-filter
+     :effect
+     (gather-factory 100 [[:food 1]]
+                     :bonus-fn flora-bonus)
+     :location-effect deplete-land}
     {:name "Elongate path"
      :uses []
      :filter {:skills {:organizing 100}}
@@ -211,6 +135,52 @@
                     (concat (subvec path 0 1)
                             [locations]
                             (subvec path 1)))))))}
+    {:name "Explore"
+     :uses [:organizing]
+     :filter {:skills {:organizing 20}}
+     :filter-fn
+     (fn [herd]
+       (>= 3 (count (second (:path herd)))))
+     :effect
+     (fn [herd _]
+       (let [terrains (set (map :terrain (get-in herd [:path 1])))
+             ok-terrains (filter (complement terrains) core/terrains)
+             location (-> ok-terrains vec rand-nth core/init-location)]
+         (update-in herd [:path 1] conj location)))}
+    {:name "Gather bog-iron"
+     :uses [:geology]
+     :filter {:terrain :swamp}
+     :filter-fn
+     #(false? (:depleted? (core/current-location %)))
+     :effect
+     (gather-factory base-need [[:ore 1]])
+     :location-effect
+     (fn [location]
+       (assoc location :depleted? true))}
+    {:name "Gather deadfall"
+     :uses [:herbalism]
+     :filter {:terrain :forest}
+     :filter-fn flora-filter
+     :effect
+     (gather-factory base-need [[:wood 1]
+                                [:bone 1/2]]
+                     :bonus-fn flora-bonus)
+     :location-effect deplete-land}
+    {:name "Gather stones"
+     :uses [:geology]
+     :effect
+     (gather-factory base-need [[:stone 1]
+                                [:ore 1/10]]
+                     :infra :quarry)}
+    {:name "Graze"
+     :uses [:herbalism]
+     :effect
+     (gather-factory base-need [[:food 1]]
+                     :bonus-fn
+                     (fn [herd]
+                       (if (= 3 (core/get-season herd))
+                         1/2
+                         1)))}
     {:name "Harvest crops"
      :uses [:herbalism]
      :filter {:terrain :plains}
@@ -230,43 +200,45 @@
     {:name "Hold festival"
      :uses [:athletics :organizing]
      :filter-fn
-     (fn [herd]
-       (> (+ (get-in herd [:stores :food] 0)
-             (get-in herd [:stores :rations] 0))
-          need))
+     #(core/herd-has-nutrition? % base-need)
      :effect
      (fn [herd skill-amount]
        (let [stadium? (core/local-infra? herd :stadium)
              modifier (skill->multiplier skill-amount)
-             amount (int (* 3
-                            modifier
-                            (if stadium? 2 1)))
-             remaining-food (- (get-in herd [:stores :food] 0) need)
-             remaining-rations
-             (if (< remaining-food 0)
-               (+ (get-in herd [:stores :rations] 0)
-                  remaining-food)
-               (get-in herd [:stores :rations]))]
+             amount (int (* 2 modifier (if stadium? 2 1)))]
          (-> herd
+             (core/consume-nutrition base-need)
              (update :individuals
                      (comp vec
-                           (partial map #(core/inc-fulfillment % amount))))
-             (assoc-in [:stores :food] (max 0 remaining-food))
-             (assoc-in [:stores :rations] remaining-rations))))}
-    {:name "Venerate the land"
-     :uses [:herbalism]
-     :filter {:terrain :forest
-              :stores {:rations base-need}
-              :skills {:herbalism base-need}
-              :filter-fn
-              (fn [herd]
-                (let [location (core/current-location herd)]
-                  (core/herd-has-skill herd
-                                       :herbalism
-                                       (* 100 (:flora location)))))}
-     :location-effect
-     (fn [location]
-       (update location :flora inc))}
+                           (partial map #(core/inc-fulfillment % amount)))))))}
+    {:name "Mag-smelt metal"
+     :filter {:power 1
+              :stores {:ore base-need}}
+     :filter-fn
+     #(core/local-infra? % :mag-forge)
+     :effect
+     (gather-factory base-need [[:metal 1]])}
+    {:name "Prepare poultices"
+     :uses [:medicine]
+     :filter {:stores {:food base-need}}
+     :effect
+     (gather-factory base-need [[:poultices 1/2]]
+                     :infra :hospital)}
+    {:name "Smelt metal"
+     :uses [:craftwork]
+     :filter {:season 2
+              :stores {:wood base-need :ore base-need}}
+     :filter-fn
+     #(core/local-infra? % :wind-forge)
+     :effect
+     (gather-factory base-need [[:metal 1/2]]
+                     :infra :monsoon-bellows)}
+    {:name "Spelunk"
+     :uses [:athletics :geology]
+     :filter {:terrain :mountain
+              :stores {:tools 5}}
+     :effect
+     (gather-factory base-need [[:ore 1]])}
     {:name "Stargaze"
      :uses [:organizing]
      :filter {:terrain :mountain}
@@ -289,14 +261,27 @@
      :effect
      (fn [herd skill-amount]
        (let [amount (int (skill->multiplier skill-amount))]
-         (core/update-current-location herd #(update % :power + amount))))}]))
+         (core/update-current-location herd #(update % :power + amount))))}
+    {:name "Venerate the land"
+     :uses [:herbalism]
+     :filter {:terrain :forest
+              :stores {:rations base-need}
+              :skills {:herbalism base-need}
+              :filter-fn
+              (fn [herd]
+                (let [location (core/current-location herd)]
+                  (core/herd-has-skill herd
+                                       :herbalism
+                                       (* 100 (:flora location)))))}
+     :location-effect
+     (fn [location]
+       (update location :flora inc))}]))
 
 (s/def ::filter-fn
   (s/or :fn ifn?
-        :fn*
-        (s/fspec
-         :args (s/cat :herd ::core/herd)
-         :ret boolean?)))
+        :fn* (s/fspec
+              :args (s/cat :herd ::core/herd)
+              :ret boolean?)))
 (s/def ::effect
   (s/or :fn ifn?
         :fn* (s/fspec
