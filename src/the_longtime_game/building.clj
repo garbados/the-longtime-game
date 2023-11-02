@@ -109,7 +109,8 @@
      :filter
      {:stores {:bone 100 :stone 100 :tools 100}
       :skills {:craftwork 75}
-      :terrain :jungle}}
+      :terrain :jungle
+      :infra :wind-forge}}
     {:name :observatory
      :description "A protected spire upon the mountain, fitted with looking-glass equipment."
      :detail "Improves the fulfillment of stargazing."
