@@ -108,6 +108,7 @@
    "Un"
    "Oplith"
    "Imun"
+   "Iqun"
    "Ikoleb"
    "Tux"
    "M'enli"
@@ -116,14 +117,19 @@
    "Hagra"
    "Gurip"
    "Eol"
-   "Yut"])
+   "Yut"
+   "Uf'cha"])
 
 (def herd-names
   ["They of One Thousand Oaks"
    "Kin of the Season-Wheel"
    "Brash-Mane Stampede"
    "They of Horn and Thorn"
-   "Staid-Hoof Kith"])
+   "Staid-Hoof Kith"
+   "They of the Behooved Order"
+   "They of the Free Herds"
+   "They of the Coalition of Horns"
+   "Blossom-Trailing Step"])
 
 (def skill-ranks ["unfamiliar"
                   "novice"
@@ -138,7 +144,7 @@
 (def pop-shift-per-delta 10)
 (def max-hunger 4)
 (def max-buildings 4)
-(def max-skill (count skill-ranks))
+(def max-skill (dec (count skill-ranks)))
 (def max-fulfillment 100)
 (def max-passions 3)
 (def experience-rate 20)
@@ -237,7 +243,7 @@
 (defn becomes-passionate?
   [used {:keys [passions]}]
   (when (> max-passions (count passions))
-    (when-let [candidates (seq (filter #(nil? (contains? passions %)) used))]
+    (when-let [candidates (seq (filter #(false? (contains? passions %)) used))]
       (let [chance (rand-int (int (* passion-rate (count candidates))))]
         (when (< chance (count candidates))
           (nth candidates chance))))))
@@ -305,7 +311,7 @@
                      ::fulfillment])
     #(g/fmap
       (fn [age] (gen-individual {:month 0} age))
-      (s/gen (s/int-in 0 (rand-int (* 12 max-age)))))))
+      (s/gen (s/int-in 0 (inc (rand-int (* 12 max-age))))))))
 
 (s/fdef gen-baby
   :args (s/cat :born ::born)
@@ -426,13 +432,6 @@
                                       ::syndicates]))
   :ret (s/keys :req-un [::syndicates]))
 
-(defn remove-syndicate [herd]
-  (update herd :syndicates (comp set rest)))
-
-(s/fdef remove-syndicate
-  :args (s/cat :herd (s/keys :req-un [::syndicates]))
-  :ret (s/keys :req-un [::syndicates]))
-
 (s/def ::terrain terrains)
 (s/def ::building buildings)
 (s/def ::infra (s/coll-of ::building :kind set?))
@@ -455,48 +454,46 @@
     (str prefix " " (string/capitalize (name terrain)))))
 
 (defn init-location
-  ([]
-   (init-location (rand-nth (seq terrains))))
-  ([terrain]
-   (let [name* (name-location terrain)]
-     (case terrain
-       :plains
-       {:name name*
-        :terrain :plains
-        :infra #{}
-        :n 2
-        :k 2
-        :p 2
-        :crop nil
-        :wild? false
-        :ready? false
-        :energy 0}
-       :forest
-       {:name name*
-        :terrain :forest
-        :infra #{}
-        :flora 1
-        :depleted? false
-        :energy 0}
-       :mountain
-       {:name name*
-        :terrain :mountain
-        :infra #{}
-        :energy 0}
-       :steppe
-       {:name name*
-        :terrain :steppe}
-       :swamp
-       {:name name*
-        :terrain :swamp
-        :infra #{}
-        :depleted? false
-        :energy 0}
-       :jungle
-       {:name name*
-        :terrain :jungle
-        :infra #{}
-        :energy 0}))))
+  [terrain]
+  (let [name* (name-location terrain)]
+    (case terrain
+      :plains
+      {:name name*
+       :terrain :plains
+       :infra #{}
+       :n 2
+       :k 2
+       :p 2
+       :crop nil
+       :wild? false
+       :ready? false
+       :energy 0}
+      :forest
+      {:name name*
+       :terrain :forest
+       :infra #{}
+       :flora 1
+       :depleted? false
+       :energy 0}
+      :mountain
+      {:name name*
+       :terrain :mountain
+       :infra #{}
+       :energy 0}
+      :steppe
+      {:name name*
+       :terrain :steppe}
+      :swamp
+      {:name name*
+       :terrain :swamp
+       :infra #{}
+       :depleted? false
+       :energy 0}
+      :jungle
+      {:name name*
+       :terrain :jungle
+       :infra #{}
+       :energy 0})))
 
 (s/def ::location
   (s/with-gen
@@ -544,10 +541,10 @@
                          :kind vector?
                          :min-count 1
                          :max-count 12))
-(s/def ::hunger (s/int-in 0 (+ 1 max-hunger)))
-(s/def ::sickness (s/int-in 0 10000))
+(s/def ::hunger (s/int-in 0 (inc max-hunger)))
+(s/def ::sickness nat-int?)
 (s/def ::index nat-int?)
-(s/def ::month (s/and nat-int? (s/int-in 0 10000)))
+(s/def ::month nat-int?)
 
 (defn gen-herd
   ([& {:keys [name hunger sickness month individuals syndicates]
@@ -599,15 +596,9 @@
                      ::index
                      ::month
                      ::path])
-    #(g/fmap (fn [args]
-               (apply gen-herd args))
-             (s/gen
-              (s/keys* :opt-un [::name
-                                ::hunger
-                                ::sickness
-                                ::month
-                                ::individuals
-                                ::syndicates])))))
+    #(g/fmap (fn [_]
+               (gen-herd))
+             (g/return 0))))
 
 (s/fdef gen-herd
   :args (s/keys* :opt-un [::name
@@ -618,24 +609,6 @@
                           ::syndicates])
   :ret ::herd)
 
-(defn update-individual
-  [herd individual f & args]
-  (update herd :individuals
-          (fn [individuals]
-            (map
-             (fn [individual*]
-               (if (= individual individual*)
-                 (apply f individual args)
-                 individual*))
-             individuals))))
-
-(s/fdef update-individual
-  :args (s/cat :herd ::herd
-               :individual ::individual
-               :f ifn?
-               :rest (s/* any?))
-  :ret ::herd)
-
 (defn update-individuals
   [herd f & args]
   (update herd :individuals
@@ -644,7 +617,28 @@
 
 (s/fdef update-individuals
   :args (s/cat :herd ::herd
-               :f ifn?
+               :f (s/fspec
+                   :args (s/cat :individual ::individual
+                                :* (s/* any?))
+                   :ret ::individual)
+               :rest (s/* any?))
+  :ret ::herd)
+
+(defn update-individual
+  [herd individual f & args]
+  (update-individuals
+   herd
+   #(if (= % individual)
+      (apply f % args)
+      %)))
+
+(s/fdef update-individual
+  :args (s/cat :herd ::herd
+               :individual ::individual
+               :f (s/fspec
+                   :args (s/cat :individual ::individual
+                                :* (s/* any?))
+                   :ret ::individual)
                :rest (s/* any?))
   :ret ::herd)
 
@@ -673,18 +667,28 @@
 
 (s/fdef update-current-location
   :args (s/cat :herd ::herd
-               :f ifn?
+               :f (s/fspec
+                   :args (s/cat :location ::location
+                                :* (s/* any?))
+                   :ret ::location)
                :rest (s/* any?))
   :ret ::herd)
 
+(defn calc-optimal-population
+  [{:keys [hunger sickness path individuals]}]
+  (int (* optimal-pops-per-stage
+          (count path)
+          (- 1 (/ hunger max-hunger))
+          (- 1 (/ sickness (count individuals))))))
+
+(s/fdef calc-optimal-population
+  :args (s/cat :herd ::herd)
+  :ret nat-int?)
+
 (defn shift-population
-  [{:keys [hunger sickness] :as herd}]
+  [herd]
   (let [population (-> herd :individuals count)
-        stages (-> herd :path count)
-        optimal (int (* optimal-pops-per-stage
-                        stages
-                        (- 1 (/ hunger max-hunger))
-                        (- 1 (/ sickness population))))
+        optimal (calc-optimal-population herd)
         delta (- optimal population)
         n (inc (Math/abs (int (/ delta pop-shift-per-delta))))]
     (if (> delta 0)
@@ -814,6 +818,10 @@
                    (reduce + 0))
         limit (carry-limit herd)]
     (< limit total)))
+
+(s/fdef must-leave-some?
+  :args (s/cat :herd ::herd)
+  :ret boolean?)
 
 (defn keep-and-leave-behind
   [herd carrying]
@@ -1069,9 +1077,18 @@
         3 (map-locations herd enter-winter))
       herd)))
 
+(s/fdef inc-season
+  :args (s/cat :herd ::herd
+               :season ::season)
+  :ret ::herd)
+
 (defn age-individuals
   [herd]
   (update-individuals herd (partial age-individual herd)))
+
+(s/fdef age-individuals
+  :args (s/cat :herd ::herd)
+  :ret ::herd)
 
 (defn inc-month [herd]
   (let [old-season (get-season herd)]
@@ -1203,95 +1220,23 @@
                :individual ::individual)
   :ret (s/tuple ::info ::herd))
 
-(s/def ::min-passions (s/int-in 0 4))
-(s/def ::max-passions (s/int-in 0 4))
-(s/def ::age (s/int-in adulthood max-age))
-(s/def ::min-fulfillment (s/int-in 0 max-fulfillment))
-(s/def ::max-fulfillment (s/int-in 0 max-fulfillment))
-(s/def ::min-age ::age)
-(s/def ::max-age ::age)
-(s/def ::character (s/keys :opt-un [::traits
-                                    ::skills
-                                    ::min-fulfillment
-                                    ::max-fulfillment
-                                    ::min-passions
-                                    ::max-passions
-                                    ::min-age
-                                    ::max-age]))
-(s/def ::select (s/coll-of ::character))
-
-(defn match-select [herd individual {:keys [traits
-                                            skills
-                                            min-fulfillment
-                                            max-fulfillment
-                                            min-passions
-                                            max-passions
-                                            min-age
-                                            max-age]}]
-  (and (if traits
-         (every? some? (for [trait traits]
-                         (-> individual :traits trait)))
-         true)
-       (if skills
-         (every? true? (for [[skill value] skills]
-                         (-> individual :skills skill (>= value))))
-         true)
-       (if min-passions
-         (>= (count (:passions individual)) min-passions)
-         true)
-       (if max-passions
-         (< (count (:passions individual)) max-passions)
-         true)
-       (let [age (get-age herd individual)]
-         (and (if max-age
-                (< age max-age)
-                true)
-              (if min-age
-                (> age min-age)
-                true)))
-       (let [fulfillment (:fulfillment individual)]
-         (and (if min-fulfillment
-                (>= fulfillment min-fulfillment)
-                true)
-              (if max-fulfillment
-                (< fulfillment max-fulfillment)
-                true)))))
-
-(s/fdef match-select
-  :args (s/cat :herd ::herd
-               :individual ::individual
-               :select ::select)
-  :ret boolean?)
-
-(defn find-character [herd character-select]
-  (first
-   (for [individual (:individuals herd)
-         :when (match-select herd individual character-select)]
-     individual)))
-
-(s/fdef find-character
-  :args (s/cat :herd ::herd
-               :character-select ::character)
-  :ret (s/nilable ::individual))
-
-(defn get-cast [herd event-or-dream]
-  (seq
-   (for [character-select (:select event-or-dream [])
-         :let [character (find-character herd character-select)]
-         :when (some? character)]
-     character)))
-
-(s/fdef get-cast
-  :args (s/cat :herd ::herd
-               :event-or-dream
-               (s/keys :req-un [::select]))
-  :ret (s/coll-of (s/nilable ::individual)))
-
-(defn herd-has-resource [herd resource n]
+(defn herd-has-resource? [herd resource n]
   (<= n (get-in herd [:stores resource] 0)))
 
-(defn herd-has-skill [herd skill n]
+(s/fdef herd-has-resource?
+  :args (s/cat :herd ::herd
+               :resource resources
+               :n pos-int?)
+  :ret boolean?)
+
+(defn herd-has-skill? [herd skill n]
   (<= n (collective-skill herd skill)))
+
+(s/fdef herd-has-skill?
+  :args (s/cat :herd ::herd
+               :skill skills
+               :n pos-int?)
+  :ret boolean?)
 
 (defn count-infra
   [herd infra]
@@ -1374,5 +1319,5 @@
 
 (s/fdef consume-nutrition
   :args (s/cat :herd ::herd
-               :n number?)
+               :n nat-int?)
   :ret ::herd)

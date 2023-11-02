@@ -191,20 +191,5 @@
        (string/join " ")))
 
 (s/fdef building->name
-  :args (s/cat :building ::building)
+  :args (s/cat :building ::core/building)
   :ret string?)
-
-(defn can-construct-building?
-  [herd building]
-  (let [{:keys [filter filter-fn]} (building->info building)]
-    (and (if filter
-           (select/passes-filter? herd filter)
-           true)
-         (if filter-fn
-           (filter-fn herd)
-           true))))
-
-(s/fdef can-construct-building?
-  :args (s/cat :herd ::core/herd
-               :building ::core/building)
-  :ret boolean?)

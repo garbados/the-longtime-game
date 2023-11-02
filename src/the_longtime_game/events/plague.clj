@@ -8,8 +8,8 @@
    :marshal-fn
    (fn [_ herd]
      (let [population (count (:individuals herd))]
-       (and (core/herd-has-resource herd :poultices (* 1/3 population))
-            (core/herd-has-skill herd :medicine (* 1/4 population)))))
+       (and (core/herd-has-resource? herd :poultices (* 1/3 population))
+            (core/herd-has-skill? herd :medicine (* 1/4 population)))))
    :effect
    (fn [info herd [individual] passed?]
      (if passed?

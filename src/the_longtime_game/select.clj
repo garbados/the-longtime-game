@@ -2,8 +2,10 @@
   (:require [clojure.spec.alpha :as s]
             [the-longtime-game.core :as core]))
 
+(s/def ::skills (s/map-of ::core/skill nat-int?))
+
 (s/def ::contacts
-  (s/or :one ::core/contacts
+  (s/or :one ::core/contact
         :many ::core/contacts))
 
 (s/def ::space
@@ -16,7 +18,7 @@
 
 (s/def ::power pos-int?)
 
-(s/def ::filter (s/keys :opt-un [::core/skills
+(s/def ::filter (s/keys :opt-un [::skills
                                  ::core/stores
                                  ::core/season
                                  ::core/terrain
@@ -159,7 +161,7 @@
                (filter
                 (complement (partial contains? selected))
                 (find-individuals herd select)))]
-       (rand-nth individuals)
+       (conj selected (rand-nth individuals))
        (reduced nil)))
    #{}
    selects))

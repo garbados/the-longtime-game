@@ -39,15 +39,14 @@
 
 (def construction-projects
   (for [[name*
-         {:keys [description detail uses filter filter-fn]
-          :as building-info}]
+         {:keys [description detail uses filter filter-fn]}]
         building/building->info]
-    {:name (str "Construct " (building/building->name building-info))
+    {:name (str "Construct " (building/building->name name*))
      :description (str description " " detail)
      :uses (cond
-             (seq uses) uses
              (nil? uses) #{:craftwork}
-             (keyword? uses) #{:craftwork uses})
+             (keyword? uses) #{:craftwork uses}
+             (seq uses) uses)
      :filter filter
      :filter-fn
      (fn [herd]
@@ -418,7 +417,7 @@
               :filter-fn
               (fn [herd]
                 (let [location (core/current-location herd)]
-                  (core/herd-has-skill herd
+                  (core/herd-has-skill? herd
                                        :herbalism
                                        (* 100 (:flora location)))))}
      :location-effect

@@ -1,6 +1,6 @@
 (ns the-longtime-game.core-test
   (:require [clojure.spec.alpha :as s]
-            [clojure.test :refer [deftest]]
+            [clojure.test :refer [deftest is testing]]
             [clojure.test.check.clojure-test :refer [defspec]]
             [clojure.test.check.properties :as props]
             [the-longtime-game.core :as core]
@@ -8,74 +8,146 @@
 
 (deftest spec-tests
   (util/spec-test-syms
-   [`core/gen-name
-    `core/inc-some-skill
-    `core/get-age
-    `core/gen-baby
-    `core/gen-adult
-    `core/gen-individual
-    `core/gen-individuals ; slow
-    `core/syndicate-name
-    `core/calculate-vote
-    `core/tally-votes
-    `core/rank-candidates
-    `core/select-candidate
-    `core/add-syndicate
-    `core/remove-syndicate
-    `core/init-location
-    `core/gen-herd ; slow
-    `core/current-location
-    `core/birth-chance
-    `core/death-chance
-    `core/has-died?
-    `core/local-infra?
-    `core/get-season
-    `core/individual-skill
-    `core/collective-skill
-    `core/collective-labor
-    `core/carry-limit
-    `core/keep-and-leave-behind
+   [`core/add-syndicate
+    `core/age-individual
+    `core/age-individuals
     `core/aggregate-store
     `core/apply-herd-upkeep
-    `core/map-locations
-    `core/has-lost?
-    `core/next-location
+    `core/assoc-location
+    `core/becomes-passionate?
+    `core/birth-chance
+    `core/calculate-vote
+    `core/carry-limit
+    `core/collective-labor
+    `core/collective-skill
+    `core/consolidate-stores
+    `core/consume-nutrition
+    `core/count-infra
     `core/crop-info
-    `core/update-nutrients
+    `core/current-location
+    `core/death-chance
+    `core/enter-fall
     `core/enter-spring
     `core/enter-summer
-    `core/enter-fall
     `core/enter-winter
-    `core/inc-month
+    `core/fresh-info
     `core/gains-experience?
+    `core/gen-adult
+    `core/gen-baby
+    `core/gen-herd
+    `core/gen-individual
+    `core/gen-individuals
+    `core/gen-name
+    `core/get-age
+    `core/get-next-contact
+    `core/get-season
+    `core/has-lost?
+    `core/herd-has-resource?
+    `core/herd-has-skill?
+    `core/herd-has-nutrition?
+    `core/inc-atomic-reactors
     `core/inc-fulfillment
+    `core/inc-month
+    `core/inc-season
+    `core/inc-some-skill
+    `core/individual-skill
+    `core/init-location
+    `core/keep-and-leave-behind
+    `core/local-infra?
+    `core/map-locations
+    `core/must-leave-some?
+    `core/new-contact?
+    `core/next-location
+    `core/perish
+    `core/plains-enters-summer
+    `core/port-cove-giftright
+    `core/rank-candidates
+    `core/remove-syndicate
+    `core/select-candidate
+    `core/shift-population
+    `core/should-add-syndicate?
+    `core/syndicate-name
+    `core/tally-votes
+    `core/update-current-location
+    `core/update-individual
     `core/update-individual-fulfillment
-    `core/pre-month
-    `core/post-month]))
+    `core/update-individuals
+    `core/update-nutrients]))
 
-;; FIXME: stable population growth
-#_(defspec test-stable-population-growth 20
+(defspec test-stable-population-growth 20
   (props/for-all
    [herd (s/gen ::core/herd)]
-   (let [births (core/birth-chance herd)
-         died? (filter (partial core/has-died? herd)
-                       (:individuals herd))
-         remove-dead
-         (partial remove
-                  (partial contains? (set died?)))
-         newborns (for [_ (range births)]
-                    (core/gen-baby (:month herd)))]
-     (println [(-> herd :individuals count)
-               (->
-                (->> (:individuals herd)
-                     (map
-                      (partial core/get-age herd))
-                     (reduce +))
-                (/ (-> herd :individuals count))
-                int)
-               (count died?)
-               births])
-     (-> herd
-         core/inc-month
-         (update :individuals remove-dead)
-         (update :individuals concat newborns)))))
+   (let [optimal (core/calc-optimal-population herd)
+         herd*
+         (reduce
+          (fn [herd _]
+            (let [[journeyings deaths] (core/shift-population herd)
+                  [new-adults new-dead] (core/calc-pop-changes herd journeyings deaths)]
+              (core/apply-pop-changes herd new-adults new-dead)))
+          herd
+          (range 100))]
+     (is (> (* 3/2 optimal)
+            (count (:individuals herd*))
+            (* 1/2 optimal))))))
+
+(deftest test-inc-max-skill
+  (testing "Skills should not change when inc'd if all skills are maxed."
+    (let [skills (reduce
+                  (fn [all skill]
+                    (assoc all skill core/max-skill))
+                  {}
+                  core/skills)
+          skills* (core/inc-some-skill skills)]
+      (is (= skills skills*)))))
+
+(deftest test-all-contacts
+  (testing "get-next-contact should get all contacts eventually."
+    (let [herd (core/gen-herd)
+          herd*
+          (reduce
+           (fn [herd _]
+             (update herd :contacts conj (core/get-next-contact herd)))
+           herd
+           (range (count core/contacts)))]
+      (is (= (count (:contacts herd*)) (count core/contacts))))))
+
+(deftest test-plains-enters-summer
+  (testing "Plains enters summer safely."
+    (let [location (core/init-location :plains)]
+      (testing "Crop is ready for harvest."
+        (let [location*
+              (core/plains-enters-summer
+               (assoc location :crop :grapplewheat))]
+          (is (true? (:ready? location*)))))
+      (testing "Crop goes wild."
+        (let [location*
+              (core/plains-enters-summer
+               (assoc location
+                      :crop :grapplewheat
+                      :ready? true))]
+          (is (true? (:wild? location*)))))
+      (testing "Crop stays wild."
+        (let [location*
+              (core/plains-enters-summer
+               (assoc location
+                      :crop :grapplewheat
+                      :wild? true))]
+          (is (true? (:wild? location*))))))))
+
+(deftest test-port-cove-giftright
+  (testing "Location should accrue interest."
+    (let [stores
+          (reduce
+           (fn [stores [resource amount]]
+             (assoc stores resource amount))
+           {}
+           (map vector core/resources (repeatedly (constantly 100))))
+          stores*
+          (-> (core/init-location :jungle)
+              (update :infra conj :port-cove)
+              (assoc :stores stores)
+              (core/port-cove-giftright)
+              :stores)]
+      (doseq [[resource amount] stores
+              :let [amount* (get stores* resource)]]
+        (is (> amount* amount))))))

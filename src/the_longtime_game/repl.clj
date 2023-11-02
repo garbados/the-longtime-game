@@ -5,6 +5,7 @@
             [the-longtime-game.moment :refer [gen-moments]]
             [the-longtime-game.project :as project]
             [the-longtime-game.remark :refer [gen-remarks]]
+            [the-longtime-game.select :as select]
             [the-longtime-game.text :as text]))
 
 (def default-width 80)
@@ -333,7 +334,7 @@
                 (partial event/can-event-trigger? info herd))
                shuffle
                first)
-          cast (core/get-cast herd event)
+          cast (select/get-cast herd event)
           args (when marshal-fn
                  (marshal-fn info herd))
           blurb (text-fn info herd cast args)
@@ -441,7 +442,7 @@
                 (partial event/can-dream-trigger? info herd))
                shuffle
                first)
-          cast (core/get-cast herd dream)
+          cast (select/get-cast herd dream)
           args (when marshal-fn
                  (marshal-fn info herd cast))
           blurb (text-fn info herd cast args)

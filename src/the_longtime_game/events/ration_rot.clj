@@ -1,12 +1,13 @@
 (ns the-longtime-game.events.ration-rot
   (:require [clojure.string :as string]
-            [the-longtime-game.core :as core]))
+            [the-longtime-game.core :as core]
+            [the-longtime-game.select :as select]))
 
 (def event
   {:name "Ration-rot"
    :marshal-fn
    (fn [_ herd & _]
-     (core/find-character herd {:skills {:medicine 3}}))
+     (first (select/find-individuals herd {:skills {:medicine 3}})))
    :effect
    (fn [info herd _ sanitarian]
      (if sanitarian

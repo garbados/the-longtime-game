@@ -2,11 +2,11 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.test :refer [deftest is testing]]
             [clojure.test.check.clojure-test :refer [defspec]]
+            [clojure.test.check.generators :as g]
             [clojure.test.check.properties :as props]
             [the-longtime-game.core :as core]
             [the-longtime-game.project :as project]
-            [the-longtime-game.test-util :as util]
-            [clojure.test.check.generators :as g]))
+            [the-longtime-game.test-util :as util]))
 
 (deftest validate-projects
   (testing "Projects conform to spec"
@@ -17,10 +17,7 @@
 
 (deftest spec-tests
   (util/spec-test-syms
-   [`project/gains-experience?
-    `project/inc-fulfillment
-    `project/update-individual-fulfillment
-    `project/distribute-experience
+   [`project/distribute-experience
     `project/distribute-fulfillment
     `project/can-enact?]))
 
@@ -31,5 +28,8 @@
                     (fn [project]
                       (project/can-enact? herd project))
                     (s/gen ::project/project))]
-     (is (s/valid? ::core/herd
-                   (project/enact-project herd project))))))
+     (and
+      (is (s/valid? ::core/herd
+                    (project/enact-project herd project)))
+      (is (s/valid? ::core/herd
+                    (project/do-project herd project)))))))

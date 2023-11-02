@@ -148,8 +148,7 @@
          true)
        (every?
         some?
-        (for [character-select (:select event [])]
-          (core/find-character herd character-select)))))
+        (select/get-cast herd (:select event [])))))
 
 (s/fdef can-event-trigger?
   :args (s/cat :herd ::core/herd
@@ -166,9 +165,9 @@
        (if-let [filter-fn (:filter-fn dream)]
          (boolean (filter-fn info herd))
          true)
-       (let [select (:select dream)
-             cast (core/get-cast herd dream)]
-         (if (and (some? select) (nil? cast))
+       (let [select (:select dream [])
+             cast (select/get-cast herd select)]
+         (if (and (seq select) (nil? cast))
            false
            (if-let [choices-fn (:choices-fn dream)]
              (if-let [marshal-fn (:marshal-fn dream)]
@@ -185,7 +184,7 @@
 
 (defn enact-event
   [info herd {:keys [name marshal-fn effect text-fn] :as event}]
-  (let [characters (core/get-cast herd event)
+  (let [characters (select/get-cast herd event)
         marshalled (when marshal-fn
                      (marshal-fn info herd))
         text (text-fn info herd characters marshalled)

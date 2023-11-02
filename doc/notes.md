@@ -25,19 +25,19 @@ A lodge requires wood, stone, and tools, but mostly wood. They seem meaningless 
 Early contacts:
 
 - Auter: *Pluriversity*
-- Harp: *Flying-market*
-- Felidar: *Chargepot-generator*
+- Harp: *Flying Market*
+- Felidar: *Chargepot Generator*
 - Er'sol: *Eldermothertree*
 
 Mid contacts
 
-- Dod: *Mag-launchpad*
-- Saurek: *Port-cove*
+- Dod: *Mag Launchpad*
+- Saurek: *Port Cove*
 
 Late contacts
 
-- Haroot: *Launch shipyard requisites*
-- Rak: *Atomic-reactor*
-- Dabulan: *Launch ringworld requisites*
+- Haroot: *Launch Shipyard Requisites*
+- Rak: *Atomic Reactor*
+- Dabulan: *Launch Ringworld Requisites*
 
 Within each tier, the next contact is random.
