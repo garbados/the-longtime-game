@@ -2,6 +2,7 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.spec.gen.alpha :as g]
             [the-longtime-game.core :as core]
+            [the-longtime-game.select :as select]
             [the-longtime-game.dreams.catharsis :as catharsis]
             [the-longtime-game.dreams.doubt :as doubt]
             [the-longtime-game.dreams.gratitude :as gratitude]
@@ -72,9 +73,6 @@
    #_{:name "Joy"}
    #_{:name "Growth"}])
 
-(s/def ::filter (s/keys :opt-un [::core/season
-                                 ::terrain
-                                 ::core/stores]))
 (s/def ::filter-fn
   (s/fspec :args (s/cat :info ::core/info
                         :herd ::core/herd)
@@ -122,8 +120,8 @@
     (s/keys :req-un [::core/name
                      :event/effect
                      :event/text-fn]
-            :opt-un [::filter
-                     ::core/select
+            :opt-un [::select/filter
+                     ::select/select
                      ::marshal-fn
                      ::filter-fn])
     #(g/elements events)))
@@ -132,37 +130,26 @@
   (s/with-gen
     (s/and
      (s/keys :req-un [::core/name
-                      ::core/select
+                      ::select/select
                       :dream/effect
                       ::marshal-fn
                       ::choices-fn
                       :dream/text-fn]
-             :opt-un [::filter
+             :opt-un [::select/filter
                       ::filter-fn])
      #(< 0 (count (:select %))))
     #(g/elements dreams)))
 
 (defn can-event-trigger?
   [info herd event]
-  (let [location (core/current-location herd)]
-    (and (if-let [terrain (get-in event [:filter :terrain])]
-           (= (:terrain location) terrain)
-           true)
-         (if-let [season (get-in event [:filter :season])]
-           (= (core/get-season herd) season)
-           true)
-         (every?
-          true?
-          (for [[resource required] (get-in event [:filter :stores] [])]
-            (let [amount (get-in herd [:stores resource] 0)]
-              (>= amount required))))
-         (if-let [filter-fn (:filter-fn event)]
-           (boolean (filter-fn info herd))
-           true)
-         (every?
-          some?
-          (for [character-select (:select event [])]
-            (core/find-character herd character-select))))))
+  (and (select/passes-filter? herd (:filter event))
+       (if-let [filter-fn (:filter-fn event)]
+         (boolean (filter-fn info herd))
+         true)
+       (every?
+        some?
+        (for [character-select (:select event [])]
+          (core/find-character herd character-select)))))
 
 (s/fdef can-event-trigger?
   :args (s/cat :herd ::core/herd
@@ -175,31 +162,20 @@
 
 (defn can-dream-trigger?
   [info herd dream]
-  (let [location (core/current-location herd)]
-    (and (if-let [terrain (get-in dream [:filter :terrain])]
-           (= (:terrain location) terrain)
-           true)
-         (if-let [season (get-in dream [:filter :season])]
-           (= (core/get-season herd) season)
-           true)
-         (every?
-          true?
-          (for [[resource required] (get-in dream [:filter :stores] [])]
-            (let [amount (get-in herd [:stores resource] 0)]
-              (>= amount required))))
-         (if-let [filter-fn (:filter-fn dream)]
-           (boolean (filter-fn info herd))
-           true)
-         (let [select (:select dream)
-               cast (core/get-cast herd dream)]
-           (if (and (some? select) (nil? cast))
-             false
-             (if-let [choices-fn (:choices-fn dream)]
-               (if-let [marshal-fn (:marshal-fn dream)]
-                 (let [args (marshal-fn info herd cast)]
-                   (dream-has-options? info herd cast args choices-fn))
-                 (dream-has-options? info herd cast nil choices-fn))
-               true))))))
+  (and (select/passes-filter? herd (:filter dream))
+       (if-let [filter-fn (:filter-fn dream)]
+         (boolean (filter-fn info herd))
+         true)
+       (let [select (:select dream)
+             cast (core/get-cast herd dream)]
+         (if (and (some? select) (nil? cast))
+           false
+           (if-let [choices-fn (:choices-fn dream)]
+             (if-let [marshal-fn (:marshal-fn dream)]
+               (let [args (marshal-fn info herd cast)]
+                 (dream-has-options? info herd cast args choices-fn))
+               (dream-has-options? info herd cast nil choices-fn))
+             true)))))
 
 (s/fdef can-dream-trigger?
   :args (s/cat :info ::core/info

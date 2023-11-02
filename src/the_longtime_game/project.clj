@@ -7,10 +7,17 @@
             [the-longtime-game.select :as select]))
 
 (def base-need 50)
+(def low-need 10)
+
+(def skill-multiplier 100)
+
+(def earlygame-skill 10)
+(def midgame-skill 100)
+(def endgame-skill 1000)
 
 (defn skill->multiplier
   [skill-amount]
-  (+ 1 (/ skill-amount 100)))
+  (+ 1 (/ skill-amount skill-multiplier)))
 
 (def flora-bonus
   #(:flora (core/current-location %)))
@@ -22,6 +29,13 @@
 
 (def deplete-land
   #(assoc % :depleted? true))
+
+(defn trade-factory
+  [resource x n m]
+  (fn [herd]
+    (let [floor (int (/ x n))
+          roll (int (/ x (inc (rand-int m))))]
+      (update-in herd [:stores resource] + floor roll))))
 
 (def construction-projects
   (for [[name*
@@ -67,6 +81,20 @@
        (for [[resource x] resources
              :let [amount (int (* x n modifier infra-bonus bonus))]]
          [resource amount])))))
+
+(defn fulfillment-factory
+  [n & {:keys [bonus-fn infra]
+        :or {bonus-fn (constantly 1)}}]
+  (fn [herd skill-amount]
+    (let [modifier (skill->multiplier skill-amount)
+          infra-bonus
+          (if (and infra
+                   (core/local-infra? herd infra))
+            2
+            1)
+          bonus (bonus-fn herd)
+          amount (int (* n modifier infra-bonus bonus))]
+      (core/update-individuals herd core/inc-fulfillment amount))))
 
 (def planting-projects
   (for [crop core/crops
@@ -114,6 +142,14 @@
      :effect
      (gather-factory base-need [[:rations 1]]
                      :infra :kitchen)}
+    {:name "Cook rations mechanically"
+     :uses [:medicine]
+     :filter {:stores {:food base-need
+                       :tools low-need}
+              :power 1}
+     :effect
+     (gather-factory base-need [[:rations 2]]
+                     :infra :kitchen)}
     {:name "Eat the land"
      :uses [:herbalism]
      :filter {:terrain :forest}
@@ -124,7 +160,7 @@
      :location-effect deplete-land}
     {:name "Elongate path"
      :uses []
-     :filter {:skills {:organizing 100}}
+     :filter {:skills {:organizing midgame-skill}}
      :effect
      (fn [herd _]
        (let [options (take 2 (shuffle (vec core/terrains)))
@@ -157,6 +193,15 @@
      :location-effect
      (fn [location]
        (assoc location :depleted? true))}
+    {:name "Gather bog-iron with magnets"
+     :uses [:geology]
+     :filter {:terrain :swamp
+              :power 1
+              :stores {:tools 10}}
+     :filter-fn
+     #(false? (:depleted? (core/current-location %)))
+     :effect
+     (gather-factory base-need [[:ore 2]])}
     {:name "Gather deadfall"
      :uses [:herbalism]
      :filter {:terrain :forest}
@@ -185,14 +230,24 @@
      :uses [:herbalism]
      :filter {:terrain :plains}
      :filter-fn
-     (fn [herd]
-       (let [location (core/current-location herd)]
-         (true? (:ready? location))))
+     #(true? (:ready? (core/current-location %)))
      :effect
-     (fn [herd skill-amount]
-       (let [modifier (skill->multiplier skill-amount)
-             amount (int (* 100 modifier))]
-         (update-in herd [:stores :food] + amount)))
+     #(update-in %1 [:stores :food] +
+                 (int (* 100 (skill->multiplier %2))))
+     :location-effect
+     #(assoc %
+             :crop nil
+             :ready? false)}
+    {:name "Harvest crops mechanically"
+     :uses [:herbalism]
+     :filter {:terrain :plains
+              :stores {:tools 10}
+              :power 1}
+     :filter-fn
+     #(true? (:ready? (core/current-location %)))
+     :effect
+     #(update-in %1 [:stores :food] +
+                 (int (* 200 (skill->multiplier %2))))
      :location-effect
      #(assoc %
              :crop nil
@@ -200,18 +255,78 @@
     {:name "Hold festival"
      :uses [:athletics :organizing]
      :filter-fn
-     #(core/herd-has-nutrition? % base-need)
+     #(core/herd-has-nutrition? % 1/5)
      :effect
-     (fn [herd skill-amount]
-       (let [stadium? (core/local-infra? herd :stadium)
-             modifier (skill->multiplier skill-amount)
-             amount (int (* 2 modifier (if stadium? 2 1)))]
-         (-> herd
-             (core/consume-nutrition base-need)
-             (update :individuals
-                     (comp vec
-                           (partial map #(core/inc-fulfillment % amount)))))))}
+     #(-> ((fulfillment-factory 2 :infra :stadium) %1 %2)
+          (core/consume-nutrition base-need))}
+    {:name "Launch probe"
+     :uses [:craftwork :organizing]
+     :filter {:power 2
+              :stores {:metal 500 :tools 1000}}
+     :filter-fn
+     #(and (core/local-infra? % :mag-launchpad)
+           (nil? (get-in % [:space :probe])))
+     :effect
+     #(-> (update % :space conj :probe)
+          (core/update-individuals core/inc-fulfillment 20))}
+    {:name "Launch permanent space station"
+     :uses [:craftwork :organizing]
+     :filter {:power 2
+              :stores {:metal 1500 :tools 2000}}
+     :filter-fn
+     #(and (core/local-infra? % :mag-launchpad)
+           (contains? (:space %) :probe)
+           (nil? (get-in % [:space :station])))
+     :effect
+     #(-> (update % :space conj :station)
+          (core/update-individuals core/inc-fulfillment 25))}
+    {:name "Launch shipyard requisites"
+     :uses [:craftwork :organizing]
+     :filter {:power 8
+              :stores {:metal 5000 :tools 10000}}
+     :filter-fn
+     #(and (core/local-infra? % :mag-launchpad)
+           (contains? (:space %) :probe)
+           (contains? (:space %) :station)
+           (nil? (get-in % [:space :shipyard])))
+     :effect
+     (fn [herd]
+       (-> herd
+           (update :space conj :shipyard)
+           (core/update-individuals core/inc-fulfillment 30)))}
+    {:name "Launch ringworld requisites"
+     :uses [:craftwork :organizing]
+     :filter {:power 16
+              :stores {:metal 50000 :tools 100000}}
+     :filter-fn
+     #(and (core/local-infra? % :mag-launchpad)
+           (contains? (:space %) :probe)
+           (contains? (:space %) :station)
+           (contains? (:space %) :shipyard)
+           (nil? (get-in % [:space :ringworld])))
+     :effect
+     (fn [herd]
+       (-> herd
+           (update :space conj :ringworld)
+           (core/update-individuals core/inc-fulfillment 40)))}
+    {:name "Launch mobile ringworld requisites"
+     :uses [:craftwork :organizing]
+     :filter {:power 32
+              :stores {:metal 500000 :tools 1000000}}
+     :filter-fn
+     #(and (core/local-infra? % :mag-launchpad)
+           (contains? (:space %) :probe)
+           (contains? (:space %) :station)
+           (contains? (:space %) :shipyard)
+           (contains? (:space %) :ringworld)
+           (nil? (get-in % [:space :mobile-ringworld])))
+     :effect
+     (fn [herd]
+       (-> herd
+           (update :space conj :mobile-ringworld)
+           (core/update-individuals core/inc-fulfillment 50)))}
     {:name "Mag-smelt metal"
+     :uses [:craftwork]
      :filter {:power 1
               :stores {:ore base-need}}
      :filter-fn
@@ -243,14 +358,47 @@
      :uses [:organizing]
      :filter {:terrain :mountain}
      :effect
-     (fn [herd skill-amount]
-       (let [observatory? (core/local-infra? herd :observatory)
-             modifier (skill->multiplier skill-amount)
-             amount (int (* 5
-                            modifier
-                            (if observatory? 2 1)))]
-         (update herd :individuals
-                 (partial map #(core/inc-fulfillment % amount)))))}
+     (fulfillment-factory 1 :infra :observatory)}
+    {:name "Synthesize medicine"
+     :uses [:medicine]
+     :filter {:infra :hospital
+              :skills {:medicine 100}
+              :stores {:food base-need
+                       :tools 10}
+              :power 1}
+     :effect
+     (gather-factory base-need [[:poultices 1]]
+                     :infra :hospital)}
+    {:name "Trade wood for stone"
+     :uses []
+     :filter {:stores {:wood base-need}
+              :infra :flyer-market}
+     :effect
+     (trade-factory :stone base-need 2 3)}
+    {:name "Trade stone for bone"
+     :uses []
+     :filter {:stores {:stone base-need}
+              :infra :flyer-market}
+     :effect
+     (trade-factory :bone base-need 3 5)}
+    {:name "Trade bone for ore"
+     :uses []
+     :filter {:stores {:bone base-need}
+              :infra :flyer-market}
+     :effect
+     (trade-factory :ore base-need 4 7)}
+    {:name "Trade ore for tools"
+     :uses []
+     :filter {:stores {:ore base-need}
+              :infra :flyer-market}
+     :effect
+     (trade-factory :tools base-need 5 9)}
+    {:name "Trade tools for metal"
+     :uses []
+     :filter {:stores {:tools base-need}
+              :infra :flyer-market}
+     :effect
+     (trade-factory :metal base-need 6 11)}
     {:name "Turn generator"
      :uses [:athletics]
      :filter {:infra :quern-generator}
@@ -304,7 +452,7 @@
     #(g/elements projects)))
 
 (defn distribute-experience
-  [{:keys [syndicates] :as herd} {:keys [uses]}]
+  [herd {:keys [uses]}]
   (let [update-passions
         (fn [individual]
           (if-let [skill (core/becomes-passionate? uses individual)]
@@ -312,7 +460,7 @@
             individual))
         update-proficiency
         (fn [individual]
-          (if-let [skill (core/gains-experience? uses syndicates individual)]
+          (if-let [skill (core/gains-experience? herd uses individual)]
             (update-in individual [:skills skill] inc)
             individual))
         update-individual

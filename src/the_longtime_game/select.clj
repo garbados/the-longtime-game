@@ -44,7 +44,10 @@
          true)
        (reduce
         (fn [ok? [resource required]]
-          (let [amount (get-in herd [:stores resource] 0)]
+          (let [amount
+                (if (> 1 required 0)
+                  (int (* required (count (:individuals herd))))
+                  (get-in herd [:stores resource] 0))]
             (and ok?
                  (>= amount required))))
         true
@@ -66,7 +69,7 @@
          (let [[kind x] (s/conform ::space space)]
            (case kind
              :one (contains? (:space herd) x)
-             :many (nil? (seq (reduce disj x (:space herd))))))
+             :many (nil? (seq (reduce disj (set x) (:space herd))))))
          true)
        (if power
          (let [location (core/current-location herd)]

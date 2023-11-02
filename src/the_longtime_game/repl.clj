@@ -4,7 +4,8 @@
             [the-longtime-game.event :as event]
             [the-longtime-game.moment :refer [gen-moments]]
             [the-longtime-game.project :as project]
-            [the-longtime-game.remark :refer [gen-remarks]]))
+            [the-longtime-game.remark :refer [gen-remarks]]
+            [the-longtime-game.text :as text]))
 
 (def default-width 80)
 
@@ -608,6 +609,15 @@
         (str (count new-dead) " " verb " returned to soil: "
              (string/join ", " (map :name new-dead))))))))
 
+(defn update-contacts
+  [herd]
+  (if (core/new-contact? herd)
+    (let [contact (core/get-next-contact herd)]
+      (println (wrap-quote-text (text/contact->blurb contact)))
+      (await-confirmation)
+      (update herd :contacts conj contact))
+    herd))
+
 (defn do-month
   [herd]
   (introduce-location herd)
@@ -619,6 +629,7 @@
           herd (core/apply-pop-changes herd new-adults new-dead)
           [info herd] (cause-event info herd)
           [info herd] (select-month-projects info herd)
+          herd (update-contacts herd)
           herd (answer-prayer info herd)
           herd (maybe-add-syndicate herd)
           herd (core/apply-herd-upkeep herd)

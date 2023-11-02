@@ -151,6 +151,8 @@
 (def hunger-rate 1/3)
 (def sickness-rate 1/4)
 (def contact-rate 2)
+(def max-flora 4)
+(def giftright-rate 20)
 
 (def crop->nutrients
   {:grapplewheat #{:n :k}
@@ -254,7 +256,7 @@
         quintile-bday? (and birthday?
                             (= 0 (rem age 5)))
         gain-passion? (and quintile-bday?
-                           (> (rand-int 3) 0))
+                           (= (rand-int 3) 0))
         skill (when gain-passion?
                 (becomes-passionate? skills individual))]
     (cond-> individual
@@ -408,7 +410,7 @@
     (first candidates)))
 
 (s/fdef select-candidate
-  :args (s/cat :herd ::herd
+  :args (s/cat :syndicates ::syndicates
                :candidates (s/coll-of ::syndicate))
   :ret (s/nilable ::syndicate))
 
@@ -441,7 +443,7 @@
 (s/def ::crop (s/nilable crops))
 (s/def ::wild? boolean?)
 (s/def ::ready? boolean?)
-(s/def ::flora (s/int-in 0 5))
+(s/def ::flora (s/int-in 0 (inc max-flora)))
 (s/def ::depleted? boolean?)
 (s/def ::energy nat-int?)
 
@@ -574,6 +576,8 @@
                         (assoc all resource 0))
                       {}
                       resources)
+             :contacts #{}
+             :space #{}
              :index 0
              :path [[(init-location :plains)]
                     [(init-location :forest)]
@@ -595,39 +599,53 @@
                      ::index
                      ::month
                      ::path])
-    #(g/fmap (fn [[individuals syndicates path stores hunger month sickness]]
-               {:individuals individuals
-                :syndicates syndicates
-                :stores stores
-                :hunger hunger
-                :sickness (min sickness (count individuals))
-                :index 0
-                :month month
-                :path path})
-             (g/tuple
-              (s/gen ::individuals)
-              (s/gen ::syndicates)
-              (s/gen ::path)
-              (s/gen ::stores)
-              (s/gen ::hunger)
-              (s/gen ::month)
-              (s/gen ::sickness)))))
+    #(g/fmap (fn [args]
+               (apply gen-herd args))
+             (s/gen
+              (s/keys* :opt-un [::name
+                                ::hunger
+                                ::sickness
+                                ::month
+                                ::individuals
+                                ::syndicates])))))
 
 (s/fdef gen-herd
-  :args (s/alt :basic
-               (s/cat)
-               :minimal
-               (s/cat :herd
-                      (s/keys :opt-un [::hunger
-                                       ::sickness
-                                       ::month]))
-               :full
-               (s/cat :individuals ::individuals
-                      :syndicates ::syndicates
-                      :herd
-                      (s/keys :opt-un [::hunger
-                                       ::sickness
-                                       ::month])))
+  :args (s/keys* :opt-un [::name
+                          ::hunger
+                          ::sickness
+                          ::month
+                          ::individuals
+                          ::syndicates])
+  :ret ::herd)
+
+(defn update-individual
+  [herd individual f & args]
+  (update herd :individuals
+          (fn [individuals]
+            (map
+             (fn [individual*]
+               (if (= individual individual*)
+                 (apply f individual args)
+                 individual*))
+             individuals))))
+
+(s/fdef update-individual
+  :args (s/cat :herd ::herd
+               :individual ::individual
+               :f ifn?
+               :rest (s/* any?))
+  :ret ::herd)
+
+(defn update-individuals
+  [herd f & args]
+  (update herd :individuals
+          (fn [individuals]
+            (vec (map #(apply f % args) individuals)))))
+
+(s/fdef update-individuals
+  :args (s/cat :herd ::herd
+               :f ifn?
+               :rest (s/* any?))
   :ret ::herd)
 
 (defn current-location
@@ -851,7 +869,7 @@
                (map #(update % :fulfillment + fulfillment-change)
                     individuals))
         (cond->
-         hunger? (update :hunger inc)
+         hunger? (update :hunger (comp #(min (dec max-hunger) %) inc))
          (not hunger?) (assoc :hunger 0)
          sickness? (assoc :sickness poultice-deficit)
          (not sickness?) (assoc :sickness 0)))))
@@ -860,19 +878,20 @@
   :args (s/cat :herd ::herd)
   :ret ::herd)
 
-(defn map-locations [f {:keys [path] :as herd}]
+(defn map-locations
+  [{:keys [path] :as herd} f & args]
   (assoc herd :path
          (vec
           (for [stage path]
             (vec
              (for [location stage]
-               (f location)))))))
+               (apply f location args)))))))
 
 (s/fdef map-locations
-  :args (s/cat :f (s/fspec
+  :args (s/cat :herd (s/keys :req-un [::path])
+               :f (s/fspec
                    :args (s/cat :location ::location)
-                   :ret ::location)
-               :herd (s/keys :req-un [::path]))
+                   :ret ::location))
   :ret (s/keys :req-un [::path]))
 
 (defn has-lost? [herd]
@@ -906,7 +925,7 @@
 (s/fdef crop-info
   :args (s/cat :crop crops)
   :ret (s/tuple (s/coll-of nutrients)
-                (s/int-in 2 4)))
+                (s/int-in 1 3)))
 
 (defn update-nutrients
   [nutrients amount location]
@@ -943,38 +962,57 @@
   :args (s/cat :location ::location)
   :ret ::location)
 
+(defn plains-enters-summer
+  [location]
+  (cond
+    ;; plains is fallow
+    ;; restore one of each nutrient
+    (nil? (:crop location))
+    (update-nutrients nutrients -1 location)
+    ;; crop is ready for harvest
+    (and (some? (:crop location))
+         (false? (:ready? location))
+         (false? (:wild? location)))
+    (let [nutrients* (crop->nutrients (:crop location))
+          unused-nutrients (filter (complement nutrients*) nutrients)]
+      ;; unused nutrients regrow
+      (as-> location $
+        (update-nutrients unused-nutrients -1 $)
+        (assoc $ :ready? true)))
+    ;; crop goes wild
+    (and (true? (:ready? location))
+         (false? (:wild? location)))
+    (let [[nutrients amount] (crop-info (:crop location))]
+      (-> (update-nutrients nutrients amount location)
+          (assoc :wild? true
+                 :ready? false)))
+    ;; crop stays wild
+    (true? (:wild? location))
+    (let [[nutrients amount] (crop-info (:crop location))]
+      (update-nutrients nutrients amount location))
+    :else
+    location))
+
+(defn port-cove-giftright
+  [location]
+  (let [rate (/ 1 (+ giftright-rate (rand-int giftright-rate)))]
+    (update location :stores
+            (fn [stores]
+              (reduce
+               (fn [stores [resource amount]]
+                 (assoc stores resource (int (* (inc rate) amount))))
+               {}
+               stores)))))
+
 (defn enter-summer
   [location]
-  (if (= :plains (:terrain location))
-    (cond
-      ;; plains is fallow
-      ;; restore one of each nutrient
-      (nil? (:crop location))
-      (update-nutrients nutrients -1 location)
-      ;; crop is ready for harvest
-      (and (some? (:crop location))
-           (false? (:ready? location))
-           (false? (:wild? location)))
-      (let [nutrients* (crop->nutrients (:crop location))
-            unused-nutrients (filter (complement nutrients*) nutrients)]
-        ;; unused nutrients regrow
-        (as-> location $
-          (update-nutrients unused-nutrients -1 $)
-          (assoc $ :ready? true)))
-      ;; crop goes wild
-      (and (true? (:ready? location))
-           (false? (:wild? location)))
-      (let [[nutrients amount] (crop-info (:crop location))]
-        (-> (update-nutrients nutrients amount location)
-            (assoc :wild? true
-                   :ready? false)))
-      ;; crop stays wild
-      (true? (:wild? location))
-      (let [[nutrients amount] (crop-info (:crop location))]
-        (update-nutrients nutrients amount location))
-      :else
-      location)
-    location))
+  (cond-> location
+    (contains? (:infra location) :port-cove)
+    port-cove-giftright
+    (= :plains (:terrain location))
+    plains-enters-summer
+    (contains? (:infra location) :chargepot-generator)
+    (update :power inc)))
 
 (s/fdef enter-summer
   :args (s/cat :location ::location)
@@ -990,7 +1028,11 @@
 
 (defn enter-winter
   [location]
-  (if (= :plains (:terrain location))
+  (cond
+    (and (= :forest (:terrain location))
+         (contains? (:infra location) :eldermothertree))
+    (update location :flora (comp (partial min max-flora) inc))
+    (= :plains (:terrain location))
     (if (and (some? (:crop location))
              (true? (:ready? location))
              (false? (:wild? location)))
@@ -999,53 +1041,77 @@
              :wild? true
              :ready? false)
       location)
+    :else
     location))
 
 (s/fdef enter-winter
   :args (s/cat :location ::location)
   :ret ::location)
 
-(defn inc-month [herd]
-  (let [old-season (get-season herd)
-        herd*
-        (-> herd
-            (update :month inc)
-            (update :individuals
-                    (partial map (partial age-individual herd))))
-        new-season (get-season herd*)]
+(defn inc-atomic-reactors
+  [path]
+  (vec
+   (for [stage path]
+     (vec
+      (for [location stage]
+        (if (contains? (:infra location) :atomic-reactor)
+          (update location :power inc)
+          location))))))
+
+(defn inc-season
+  [herd old-season]
+  (let [new-season (get-season herd)]
     (if (not= new-season old-season)
       (case new-season
-        ;; spring
-        0 (map-locations enter-spring herd*)
-        ;; summer
-        1 (map-locations enter-summer herd*)
-        ;; fall
-        2 (map-locations enter-fall herd*)
-        ;; winter
-        3 (map-locations enter-winter herd*))
-      herd*)))
+        0 (map-locations herd enter-spring)
+        1 (map-locations herd enter-summer)
+        2 (map-locations herd enter-fall)
+        3 (map-locations herd enter-winter))
+      herd)))
+
+(defn age-individuals
+  [herd]
+  (update-individuals herd (partial age-individual herd)))
+
+(defn inc-month [herd]
+  (let [old-season (get-season herd)]
+    (-> herd
+        (update :month inc)
+        (inc-season old-season)
+        age-individuals
+        (update :path inc-atomic-reactors)
+        (map-locations
+         (fn [location]
+           (cond
+             (contains? (:infra location) :stonetower-batteries)
+             location
+             (contains? (:infra location) :chargepot-generator)
+             (update location :power min 1)
+             :else
+             (assoc location :power 0)))))))
 
 (s/fdef inc-month
   :args (s/cat :herd ::herd)
   :ret ::herd)
 
 (defn gains-experience?
-  [used syndicates {:keys [passions skills]}]
+  [{:keys [syndicates] :as herd} used {:keys [passions skills]}]
   (let [used* (filter #(> max-skill (get skills %)) used)
         syndicate-counts (frequencies (reduce into syndicates []))
         syndicate-bonus #(get syndicate-counts % 0)
-        passion-bonus #(if (contains? passions %) 2 0)]
+        passion-bonus #(if (contains? passions %) 2 0)
+        versity-bonus (if (local-infra? herd :pluriversity) 2 0)]
     (first
      (filter
       (fn [skill]
-        (let [bonus (+ 1 (syndicate-bonus skill) (passion-bonus skill))
+        (let [bonus (+ 1 (syndicate-bonus skill) (passion-bonus skill) versity-bonus)
               roll (rand-int experience-rate)]
           (>= bonus roll)))
       used*))))
 
 (s/fdef gains-experience?
-  :args (s/cat :used ::uses
-               :syndicates ::syndicates
+  :args (s/cat :herd ::herd
+               :used ::uses
                :individual ::individual)
   :ret (s/nilable ::skill))
 
@@ -1075,24 +1141,6 @@
   :args (s/cat :uses ::uses
                :individual ::individual)
   :ret ::individual)
-
-(defn update-individual
-  [herd individual f & args]
-  (update herd :individuals
-          (fn [individuals]
-            (map
-             (fn [individual*]
-               (if (= individual individual*)
-                 (apply f individual args)
-                 individual*))
-             individuals))))
-
-(s/fdef update-individual
-  :args (s/cat :herd ::herd
-               :individual ::individual
-               :f ifn?
-               :rest (s/* any?))
-  :ret ::herd)
 
 (defn consolidate-stores
   [herd]
@@ -1254,12 +1302,21 @@
             1))]
     (reduce (partial reduce +) 0 infra-count)))
 
+(s/fdef count-infra
+  :args (s/cat :herd ::herd
+               :infra ::building)
+  :ret nat-int?)
+
 (defn new-contact?
   [herd]
   (let [n (count (:contacts herd))]
     (> (count-infra herd :lodge)
        (+ n contact-rate
           (Math/pow n contact-rate)))))
+
+(s/fdef new-contact?
+  :args (s/cat :herd ::herd)
+  :ret boolean?)
 
 ;; 0 => 2
 ;; 1 => (1 + 2 + 1^2) => 4
@@ -1294,7 +1351,14 @@
   [herd n]
   (>= (+ (get-in herd [:stores :food] 0)
          (get-in herd [:stores :rations] 0))
-      n))
+      (if (> 1 n 0)
+        (* n (count (:individuals herd)))
+        n)))
+
+(s/fdef herd-has-nutrition?
+  :args (s/cat :herd ::herd
+               :n number?)
+  :ret boolean?)
 
 (defn consume-nutrition
   [herd n]
@@ -1307,3 +1371,8 @@
     (-> herd
         (assoc-in [:stores :food] (max 0 remaining-food))
         (assoc-in [:stores :rations] (max 0 remaining-rations)))))
+
+(s/fdef consume-nutrition
+  :args (s/cat :herd ::herd
+               :n number?)
+  :ret ::herd)

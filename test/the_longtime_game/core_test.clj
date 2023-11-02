@@ -23,7 +23,7 @@
     `core/add-syndicate
     `core/remove-syndicate
     `core/init-location
-    `core/gen-herd
+    `core/gen-herd ; slow
     `core/current-location
     `core/birth-chance
     `core/death-chance
