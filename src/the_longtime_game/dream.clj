@@ -4,12 +4,13 @@
             [clojure.spec.gen.alpha :as g]
             [the-longtime-game.core :as core]
             [the-longtime-game.dream-text :as dream-text]
-            [the-longtime-game.scene :as scene]))
+            [the-longtime-game.scene :as scene]
+            [the-longtime-game.select :as select]))
 
 (def catharsis
   {:name "Catharsis"
    :text-fn dream-text/catharsis
-   :select [{:max-fulfillment 30}]
+   :selects [{:fulfillment [<= 30]}]
    :marshal-fn
    (fn [_info _herd [sadcow]]
      (-> sadcow :traits :depressed))
@@ -27,7 +28,7 @@
 (def doubt
   {:name "Doubt"
    :text-fn dream-text/doubt
-   :select [{:traits :depressed}]
+   :selects [{:traits :depressed}]
    :marshal-fn
    (fn [_info _herd [sadcow]]
      (rand-nth (vec (:passions sadcow))))
@@ -46,7 +47,7 @@
 (def gratitude
   {:name "Gratitude"
    :text-fn dream-text/gratitude
-   :select [{:min-fulfillment 70}]
+   :selects [{:min-fulfillment 70}]
    :effect
    (fn [_info herd [happycow] & _]
      (cond
@@ -66,7 +67,7 @@
 (def purpose
   {:name "Purpose"
    :text-fn dream-text/purpose
-   :select [{:max-passions 2}]
+   :selects [{:max-passions 2}]
    :choices-fn
    (fn [_info _herd [dreamer] _]
      (->> (:passions dreamer)
@@ -102,6 +103,36 @@
                       ::choices-fn])
      #(pos-int? (count (:selects %))))
     #(g/elements dreams)))
+
+(defn pick-dream
+  [info herd]
+  (first
+   (filter (partial scene/scene-may-occur? info herd)
+           (shuffle dreams))))
+
+(s/fdef pick-dream
+  :args (s/cat :info ::core/info
+               :herd ::core/herd)
+  :ret ::dream)
+
+(defn marshal-dream
+  [info herd {:keys [selects marshal-fn choices-fn text-fn effect]}]
+  (let [individuals (select/get-cast herd selects)
+        args (marshal-fn info herd individuals)]
+    [(choices-fn info herd individuals args)
+     (partial text-fn info herd individuals args)
+     (partial effect info herd individuals args)]))
+
+(s/fdef marshal-dream
+  :args (s/cat :info ::core/info
+               :herd ::core/herd
+               :dream ::dream)
+  :ret (s/tuple
+        (s/coll-of any?)
+        (s/fspec :args (s/cat :choice any?)
+                 :ret string?)
+        (s/fspec :args (s/cat :choice any?)
+                 :ret string?)))
 
 (comment
   "Dream ideas..."

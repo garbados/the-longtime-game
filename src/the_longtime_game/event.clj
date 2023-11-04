@@ -167,7 +167,7 @@
       (concat critical-events
               general-events))))
 
-(defn marshal-event
+(defn pick-event
   [info herd]
   (let [event-may-occur? (partial scene/scene-may-occur? info herd)
         event (or (and (= 0 (rand-int 2))
@@ -175,7 +175,7 @@
                   (first (shuffle (filter event-may-occur? general-events))))]
     (scene/marshal-scene info herd event)))
 
-(s/fdef marshal-event
+(s/fdef pick-event
   :args (s/cat :info ::core/info
                :herd ::core/herd)
   :ret ::event)
