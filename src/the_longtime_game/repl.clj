@@ -6,87 +6,10 @@
             [the-longtime-game.project :as project]
             [the-longtime-game.remark :refer [gen-remarks]]
             [the-longtime-game.select :as select]
-            [the-longtime-game.text :as text]))
-
-(def default-width 80)
-
-(defn collect-text
-  [s]
-  (vec
-   (for [p (string/split s #"\n\n")]
-     (string/join
-      "\n"
-      (for [line (string/split p #"\n")
-            :let [trimmed (string/trim line)]
-            :when (< 0 (count trimmed))]
-        trimmed)))))
-
-(defn wrap-text
-  ([s]
-   (wrap-text s default-width))
-  ([s width]
-   (map
-    #(string/join " " %)
-    (reduce
-     (fn [lines line]
-       (reduce
-        (fn [segment word]
-          (let [line (last segment)
-                line* (string/join " " (concat line [word]))
-                line-width (count line*)]
-            (if (> line-width width)
-              (conj segment [word])
-              (conj (pop segment)
-                    (conj line word)))))
-        lines
-        (string/split line #" ")))
-     [[]]
-     (string/split-lines s)))))
-
-(defn quote-text
-  [s & {:keys [prefix width]
-        :or {prefix ">"
-             width default-width}}]
-  (let [width* (- width (count prefix))
-        sections (map
-                  #(wrap-text % width*)
-                  (collect-text s))]
-    (string/join
-     (str "\n" prefix "\n")
-     (for [section sections]
-       (string/join
-        "\n"
-        (for [line section]
-          (str prefix " " line)))))))
-
-(defn wrap-quote-text
-  [s & {:keys [prefix header footer width]
-        :or {header "┌────"
-             prefix "│"
-             footer "└────"
-             width default-width}}]
-  (let [text (quote-text s
-                         :prefix prefix
-                         :width width)]
-    (string/join "\n" [header text footer])))
-
-(defn wrap-options
-  [header options & {:keys [prefix prefix-h footer]
-                     :or {prefix-h "┌"
-                          prefix "├─"
-                          footer "└────"}}]
-  (let [lines
-        (concat [(string/join " " [prefix-h header])]
-                (map
-                 (fn [option]
-                   (let [option*
-                         (if (keyword? option)
-                           (name option)
-                           option)]
-                     (string/join " " [prefix option*])))
-                 options)
-                [footer])]
-    (string/join "\n" lines)))
+            [the-longtime-game.text :refer [wrap-options
+                                            wrap-quote-text
+                                            quote-text]]
+            [the-longtime-game.contact-text :as contact-text]))
 
 (defn exit-game [& _] (System/exit 0))
 
@@ -523,13 +446,13 @@
       herd)))
 
 (defn introduce-location
-  [herd]
+  [info herd]
   (let [location (core/current-location herd)
         steppe? (= :steppe (:terrain location))
         remarks (if steppe?
                   (gen-remarks herd)
                   (string/join " " [(gen-remarks herd)
-                                    (gen-moments herd)]))]
+                                    (gen-moments info herd)]))]
     (println (quote-text (str "The herd arrives at " (:name location) ".")))
     (println (wrap-quote-text remarks))
     (when steppe?
@@ -614,18 +537,18 @@
   [herd]
   (if (core/new-contact? herd)
     (let [contact (core/get-next-contact herd)]
-      (println (wrap-quote-text (text/contact->blurb contact)))
+      (println (wrap-quote-text (contact-text/contact->blurb contact)))
       (await-confirmation)
       (update herd :contacts conj contact))
     herd))
 
 (defn do-month
   [herd]
-  (introduce-location herd)
   (if (= :steppe (:terrain (core/current-location herd)))
     (choose-next-location herd)
     (let [herd (core/consolidate-stores herd)
           {:keys [new-adults new-dead] :as info} (marshal-info herd)
+          _ (introduce-location info herd)
           _ (announce-pop-changes new-adults new-dead)
           herd (core/apply-pop-changes herd new-adults new-dead)
           [info herd] (cause-event info herd)

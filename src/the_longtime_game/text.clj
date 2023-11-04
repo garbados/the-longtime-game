@@ -1,30 +1,87 @@
-(ns the-longtime-game.text)
+(ns the-longtime-game.text 
+  (:require [clojure.string :as string]))
 
-(def auter-contact "TODO")
+(def default-width 80)
 
-(def felidar-contact "TODO")
+(defn join-text
+  [& s]
+  (->> (string/join " " s)
+       string/split-lines
+       (map string/trim)
+       (filter #(pos-int? (count %)))
+       (string/join " ")))
 
-(def harp-contact "TODO")
+(defn collect-text
+  [s]
+  (for [p (string/split s #"\n\n")]
+    (->> (string/split-lines p)
+         (map string/trim)
+         (filter (comp pos-int? count))
+         (string/join "\n"))))
 
-(def er-sol-contact "TODO")
+(defn wrap-text
+  ([s]
+   (wrap-text s default-width))
+  ([s width]
+   (map
+    #(string/join " " %)
+    (reduce
+     (fn [lines line]
+       (reduce
+        (fn [segment word]
+          (let [line (last segment)
+                line* (string/join " " (concat line [word]))
+                line-width (count line*)]
+            (if (> line-width width)
+              (conj segment [word])
+              (conj (pop segment)
+                    (conj line word)))))
+        lines
+        (string/split line #" ")))
+     [[]]
+     (string/split-lines s)))))
 
-(def dod-contact "TODO")
+(defn quote-text
+  [s & {:keys [prefix width]
+        :or {prefix ">"
+             width default-width}}]
+  (let [width* (- width (count prefix))
+        sections (map
+                  #(wrap-text % width*)
+                  (collect-text s))]
+    (string/join
+     (str "\n" prefix "\n")
+     (for [section sections]
+       (string/join
+        "\n"
+        (for [line section]
+          (str prefix " " line)))))))
 
-(def saurek-contact "TODO")
+(defn wrap-quote-text
+  [s & {:keys [prefix header footer width]
+        :or {header "┌────"
+             prefix "│"
+             footer "└────"
+             width default-width}}]
+  (let [text (quote-text s
+                         :prefix prefix
+                         :width width)]
+    (string/join "\n" [header text footer])))
 
-(def haroot-contact "TODO")
-
-(def rak-contact "TODO")
-
-(def dabulan-contact "TODO")
-
-(def contact->blurb
-  {:auter auter-contact
-   :felidar felidar-contact
-   :harp harp-contact
-   :er-sol er-sol-contact
-   :dod dod-contact
-   :saurek saurek-contact
-   :haroot haroot-contact
-   :rak rak-contact
-   :dabulan dabulan-contact})
+(defn wrap-options
+  [header options & {:keys [prefix prefix-h footer]
+                     :or {prefix-h "┌"
+                          prefix "├─"
+                          footer "└────"}}]
+  (let [lines
+        (concat [(string/join " " [prefix-h header])]
+                (map
+                 (fn [option]
+                   (let [option*
+                         (if (keyword? option)
+                           (name option)
+                           option)]
+                     (string/join " " [prefix option*])))
+                 options)
+                [footer])]
+    (string/join "\n" lines)))

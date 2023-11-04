@@ -200,6 +200,7 @@
                     (rand-nth second-syllable)]))
 
 (s/def ::name string?)
+(s/def ::age int?)
 
 (s/fdef gen-name
   :args (s/cat)
@@ -238,7 +239,7 @@
 (s/fdef get-age
   :args (s/cat :herd (s/keys :req-un [::month])
                :individual (s/keys :req-un [::born]))
-  :ret int?)
+  :ret ::age)
 
 (defn becomes-passionate?
   [used {:keys [passions]}]
@@ -444,7 +445,7 @@
 (s/def ::ready? boolean?)
 (s/def ::flora (s/int-in 0 (inc max-flora)))
 (s/def ::depleted? boolean?)
-(s/def ::energy nat-int?)
+(s/def ::power nat-int?)
 
 (defn name-location [terrain]
   (let [prefix (string/join
@@ -467,19 +468,19 @@
        :crop nil
        :wild? false
        :ready? false
-       :energy 0}
+       :power 0}
       :forest
       {:name name*
        :terrain :forest
        :infra #{}
        :flora 1
        :depleted? false
-       :energy 0}
+       :power 0}
       :mountain
       {:name name*
        :terrain :mountain
        :infra #{}
-       :energy 0}
+       :power 0}
       :steppe
       {:name name*
        :terrain :steppe}
@@ -488,12 +489,12 @@
        :terrain :swamp
        :infra #{}
        :depleted? false
-       :energy 0}
+       :power 0}
       :jungle
       {:name name*
        :terrain :jungle
        :infra #{}
-       :energy 0})))
+       :power 0})))
 
 (s/def ::location
   (s/with-gen
@@ -509,19 +510,19 @@
                                ::wild?
                                ::ready?
                                ::stores
-                               ::energy])
+                               ::power])
       :forest (s/keys :req-un [::infra
                                ::flora
                                ::depleted?
                                ::stores
-                               ::energy])
+                               ::power])
       :swamp (s/keys :req-un [::infra
                               ::depleted?
                               ::stores
-                               ::energy])
+                               ::power])
       :basic  (s/keys :req-un [::infra
                                ::stores
-                               ::energy])
+                               ::power])
       :shortcut (s/keys :req-un [])))
     #(g/fmap init-location
              (s/gen terrains))))

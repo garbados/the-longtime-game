@@ -2,199 +2,207 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.spec.gen.alpha :as g]
             [the-longtime-game.core :as core]
+            [the-longtime-game.event-text :as event-text]
+            [the-longtime-game.scene :as scene]
             [the-longtime-game.select :as select]
-            [the-longtime-game.dreams.catharsis :as catharsis]
-            [the-longtime-game.dreams.doubt :as doubt]
-            [the-longtime-game.dreams.gratitude :as gratitude]
-            [the-longtime-game.dreams.purpose :as purpose]
-            [the-longtime-game.events.crossed-paths :as crossed-paths]
-            [the-longtime-game.events.depression :as depression]
-            [the-longtime-game.events.fire :as fire]
-            [the-longtime-game.events.journeying :as journeying]
-            [the-longtime-game.events.plague :as plague]
-            [the-longtime-game.events.ration-rot :as ration-rot]
-            [the-longtime-game.events.wound-healed :as wound-healed]))
+            [the-longtime-game.event :as event]))
 
-(def events
-  [plague/event
-   ration-rot/event
-   #_gruxnis-attack/event
-   depression/event
-   wound-healed/event
-   crossed-paths/event
-   fire/event
-   journeying/solo-journeying-event
-   journeying/many-journeying-event
-   #_{:name "Flash flood"
-      :select [{:athletics 2}]
-      :filter {:stores {:tools 10} :skills {:craftwork 10 :organizing 10}}
-      :effect
-      (fn [info herd [individual] _]
-        [info
-         (core/update-individual herd individual
-                                 #(update % :traits conj :wounded))])
-      :text-fn
-      (constantly "TODO")}
-   #_{:name "Public dispute"
-      :select [{:min-passions 2} {:min-passions 2}]
-      :effect
-      (fn [info herd [fitecow1 fitecow2] _]
-      ;; TODO
-        [info herd])
-      :text-fn
-      (constantly "TODO")}
-   #_{:name "Syndicate rivalry"}
-   #_{:name "Catharsis"}
-   #_{:name "Wound festers"}
-   #_{:name "Head injury"}
-   #_{:name "Syndicate induction"}
-   #_{:name "Fallen in love"}])
+(def crossed-paths
+  {:name "Crossed Paths"
+   :selects [{:skills {:organizing 3}}]
+   :text-fn event-text/crossed-paths
+   :marshal-fn
+   (fn [_ herd & _]
+     (let [n (int (* 1/8 (count (:individuals herd))))]
+       (reduce
+        (fn [all resource]
+          (assoc all resource (rand-int n)))
+        {}
+        (take (rand-int (count core/carryable))
+              (vec core/carryable)))))
+   :effect
+   (fn [info herd _ gift]
+     [info
+      (-> herd
+          (update :stores (partial merge-with +) gift)
+          (core/update-individuals #(core/inc-fulfillment % 5)))])})
 
-(def dreams
-  [purpose/dream
-   doubt/dream
-   catharsis/dream
-   gratitude/dream
-   #_{:name "Exhaustion"}
-   #_{:name "Gratitude"
-      :select [{}]
-      :filter-fn
-      (fn [_ herd]
-        (< 70 (/ (reduce + (map :fulfillment (:individuals herd)))
-                 (count (:individuals herd)))))}
-   #_{:name "Grief"
-      :select [{}]
-      :filter-fn
-      (fn [{:keys [deaths]} _]
-        (< 0 (count deaths)))
-      :marshal-fn
-      (fn [{:keys [deaths]} _ _]
-        (rand-nth deaths))}
-   #_{:name "Joy"}
-   #_{:name "Growth"}])
+(def depression-ends
+  {:name "Depression Ends"
+   :selects [{:traits :depressed} {:skills {:medicine 4}}]
+   :text-fn event-text/depression-ends
+   :effect
+   (fn [info herd [sadcow healcow] & _]
+     [info
+      (-> herd
+          (core/update-individual
+           sadcow
+           #(update % :traits disj :depressed))
+          (core/update-individual
+           healcow
+           #(core/inc-fulfillment % 10)))])})
 
-(s/def ::filter-fn
-  (s/fspec :args (s/cat :info ::core/info
-                        :herd ::core/herd)
-           :ret boolean?))
-(s/def ::marshal-fn
-  (s/fspec
-   :args (s/cat :info ::core/info
-                :herd ::core/herd
-                :cast ::core/individuals)))
-(s/def :event/effect
-  (s/fspec :args (s/cat :info ::core/info
-                        :herd ::core/herd
-                        :cast ::core/individuals
-                        :marshalled any?)
-           :ret (s/tuple ::core/info ::core/herd)))
-(s/def :dream/effect
-  (s/fspec :args (s/cat :info ::core/info
-                        :herd ::core/herd
-                        :cast ::core/individuals
-                        :marshalled any?
-                        :choice any?)
-           :ret (s/tuple ::core/info ::core/herd)))
-(s/def ::choices-fn
-  (s/fspec :args (s/cat :info ::core/info
-                        :herd ::core/herd
-                        :cast ::core/individuals
-                        :marshalled any?)
-           :ret any?))
-(s/def :event/text-fn
-  (s/fspec :args (s/cat :info ::core/info
-                        :herd ::core/herd
-                        :cast ::core/individuals
-                        :marshalled any?)
-           :ret string?))
-(s/def :dream/text-fn
-  (s/fspec :args (s/cat :info ::core/info
-                        :herd ::core/herd
-                        :cast ::core/individuals
-                        :marshalled any?
-                        :choice any?)
-           :ret string?))
+(def fire!
+  {:name "Fire!"
+   :text-fn event-text/fire!
+   :selects [{:traits :weary}]
+   :filter-fn
+   (fn [_ herd]
+     (let [location (core/current-location herd)]
+       (pos-int? (count (:infra location)))))
+   :marshal-fn
+   (fn [_ herd _]
+     (let [location (core/current-location herd)]
+       (rand-nth (vec (:infra location)))))
+   :effect
+   (fn [info herd [individual] infra]
+     (let [location (core/current-location herd)
+           location* (update location :infra disj infra)]
+       [info
+        (-> herd
+            (core/assoc-location location*)
+            (core/update-individual
+             individual
+             #(update % :traits disj :weary)))]))})
+
+(def gruxnis-attack!
+  {:name "Grux'nis attack"
+   :text-fn event-text/gruxnis-attack!
+   :selects [{} {:skills {:medicine 4 :athletics 4}}]
+   :effect
+   (fn [info herd [victim ibba] & _]
+     [info
+      (-> herd
+          (core/update-individual
+           victim
+           #(update % :traits conj :wounded))
+          (core/update-individual
+           ibba
+           #(-> %
+                (update-in [:skills :medicine] inc)
+                (update-in [:skills :athletics] inc))))])})
+
+(def journeying-ends
+  {:name "Journeying Ends"
+   :text-fn event-text/journeying-ends
+   :filter-fn
+   (fn [info _]
+     (> (count (:new-adults info)) 0))})
+
+(def offshoot-joins
+  {:name "Offshoot Joins"
+   :text-fn event-text/offshoot-joins
+   :filter-fn
+   (fn [info _]
+     (> (count (:new-adults info)) 4))})
+
+(def plague
+  {:name "Plague!"
+   :text-fn event-text/plague
+   :selects [{}]
+   :marshal-fn
+   (fn [_ herd]
+     (let [population (count (:individuals herd))]
+       (and (core/herd-has-resource? herd :poultices (* 1/3 population))
+            (core/herd-has-skill? herd :medicine (* 1/4 population)))))
+   :effect
+   (fn [info herd [individual] passed?]
+     (if passed?
+       [info
+        (update-in herd [:stores :poultices] (comp int *) 2/3)]
+       (core/perish info herd individual)))})
+
+(def ration-rot
+  {:name "Ration Rot"
+   :text-fn event-text/ration-rot
+   :marshal-fn
+   (fn [_ herd & _]
+     (first (select/find-individuals herd {:skills {:medicine 3}})))
+   :effect
+   (fn [info herd _ sanitarian]
+     [info
+      (if sanitarian
+        (update-in herd [:stores :rations] (comp int *) 2/3)
+        (-> herd
+            (update-in [:stores :rations] (comp int *) 1/2)
+            (update :individuals
+                    (fn [individuals]
+                      (vec
+                       (for [individual individuals]
+                         (core/inc-fulfillment individual -5)))))))])})
+
+(def wound-healed
+  {:name "Wound Healed"
+   :text-fn event-text/wound-healed
+   :selects [{:traits #{:wounded}} {:skills {:medicine 3 :craftwork 3}}]
+   :filter {:stores {:poultices 5 :tools 5}}
+   :effect
+   (fn [info herd [hurtcow healcow] _]
+     [info
+      (-> herd
+          (core/update-individual
+           hurtcow
+           #(update % :traits disj :wounded))
+          (core/update-individual
+           healcow
+           #(update % :fulfillment + 10)))])})
+
+(def critical-events
+  [depression-ends
+   fire!
+   gruxnis-attack!
+   plague
+   ration-rot
+   wound-healed])
+
+(def general-events
+  [journeying-ends
+   offshoot-joins
+   crossed-paths])
 
 (s/def ::event
   (s/with-gen
-    (s/keys :req-un [::core/name
-                     :event/effect
-                     :event/text-fn]
-            :opt-un [::select/filter
-                     ::select/select
-                     ::marshal-fn
-                     ::filter-fn])
-    #(g/elements events)))
+    ::scene/scene
+    #(g/elements
+      (concat critical-events
+              general-events))))
 
-(s/def ::dream
-  (s/with-gen
-    (s/and
-     (s/keys :req-un [::core/name
-                      ::select/select
-                      :dream/effect
-                      ::marshal-fn
-                      ::choices-fn
-                      :dream/text-fn]
-             :opt-un [::select/filter
-                      ::filter-fn])
-     #(< 0 (count (:select %))))
-    #(g/elements dreams)))
+(defn marshal-event
+  [info herd]
+  (let [event-may-occur? (partial scene/scene-may-occur? info herd)
+        event (or (and (= 0 (rand-int 2))
+                       (first (shuffle (filter event-may-occur? critical-events))))
+                  (first (shuffle (filter event-may-occur? general-events))))]
+    (scene/marshal-scene info herd event)))
 
-(defn can-event-trigger?
-  [info herd event]
-  (and (select/passes-filter? herd (:filter event))
-       (if-let [filter-fn (:filter-fn event)]
-         (boolean (filter-fn info herd))
-         true)
-       (every?
-        some?
-        (select/get-cast herd (:select event [])))))
-
-(s/fdef can-event-trigger?
-  :args (s/cat :herd ::core/herd
-               :event ::event)
-  :ret boolean?)
-
-(defn dream-has-options?
-  [info herd cast args choices-fn]
-  (< 0 (count (choices-fn info herd cast args))))
-
-(defn can-dream-trigger?
-  [info herd dream]
-  (and (select/passes-filter? herd (:filter dream))
-       (if-let [filter-fn (:filter-fn dream)]
-         (boolean (filter-fn info herd))
-         true)
-       (let [select (:select dream [])
-             cast (select/get-cast herd select)]
-         (if (and (seq select) (nil? cast))
-           false
-           (if-let [choices-fn (:choices-fn dream)]
-             (if-let [marshal-fn (:marshal-fn dream)]
-               (let [args (marshal-fn info herd cast)]
-                 (dream-has-options? info herd cast args choices-fn))
-               (dream-has-options? info herd cast nil choices-fn))
-             true)))))
-
-(s/fdef can-dream-trigger?
+(s/fdef marshal-event
   :args (s/cat :info ::core/info
-               :herd ::core/herd
-               :dream ::dream)
-  :ret boolean?)
+               :herd ::core/herd)
+  :ret ::event)
 
-(defn enact-event
-  [info herd {:keys [name marshal-fn effect text-fn] :as event}]
-  (let [characters (select/get-cast herd event)
-        marshalled (when marshal-fn
-                     (marshal-fn info herd))
-        text (text-fn info herd characters marshalled)
-        [info herd] (effect info herd characters marshalled)]
-    [(assoc info :event name)
-     herd
-     text]))
-
-(s/fdef enact-event
-  :args (s/cat :info ::core/info
-               :herd ::core/herd
-               :event ::event)
-  :ret (s/tuple ::core/info ::core/herd string?))
+(comment
+  "Event ideas..."
+  {:name "Flash flood"
+   :select [{:athletics 2}]
+   :filter {:stores {:tools 10} :skills {:craftwork 10 :organizing 10}}
+   :effect
+   (fn [info herd [individual] _]
+     [info
+      (core/update-individual herd individual
+                              #(update % :traits conj :wounded))])
+   :text-fn
+   (constantly "TODO")}
+  {:name "Public dispute"
+   :select [{:min-passions 2} {:min-passions 2}]
+   :effect
+   (fn [info herd [fitecow1 fitecow2] _]
+        ;; TODO
+     [info herd])
+   :text-fn
+   (constantly "TODO")}
+  {:name "Syndicate rivalry"}
+  {:name "Catharsis"}
+  {:name "Wound festers"}
+  {:name "Head injury"}
+  {:name "Syndicate induction"}
+  {:name "Fallen in love"})

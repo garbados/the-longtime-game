@@ -90,19 +90,33 @@
                :filter ::filter)
   :ret boolean?)
 
+(s/def ::comp?
+  (s/fspec :args (s/cat :n1 any?
+                        :n2 any?)
+           :ret boolean?))
+
+(s/def ::set-comp?
+  (s/fspec :args (s/cat :set set?
+                        :x any?)
+           :ret boolean?))
+
 (s/def ::fulfillment
   (s/or :n ::core/fulfillment
-        :comp (s/tuple ifn? ::core/fulfillment)))
+        :comp (s/tuple ::comp? ::core/fulfillment)))
 
 (s/def ::passions
   (s/or :passion ::core/skill
         :set ::core/uses
-        :comp (s/tuple ifn? (s/int-in 0 (inc core/max-passions)))))
+        :comp (s/tuple ::set-comp? (s/int-in 0 (inc core/max-passions)))))
+
+(s/def ::traits
+  (s/or :one core/traits
+        :many ::core/traits))
 
 (s/def ::age
-  (s/tuple ifn? ::core/age))
+  (s/tuple ::comp? ::core/age))
 
-(s/def ::select (s/keys :opt-un [::core/traits
+(s/def ::select (s/keys :opt-un [::traits
                                  ::core/skills
                                  ::fulfillment
                                  ::passions
@@ -110,9 +124,12 @@
 
 (defn passes-select?
   [herd individual {:keys [traits skills fulfillment passions age]}]
-  (and (if traits
-         (every? some? (for [trait traits]
-                         (-> individual :traits trait)))
+  (and (if (and traits (s/valid? ::traits traits))
+         (let [[kind x] (s/conform ::traits traits)]
+           (case kind
+             :one (-> individual :traits x)
+             :many (every? some? (for [trait x]
+                                   (-> individual :traits trait)))))
          true)
        (if skills
          (every? true? (for [[skill value] skills]
@@ -122,7 +139,7 @@
          (comp (core/get-age herd individual) n)
          true)
        (if (and fulfillment (s/valid? ::fulfillment fulfillment))
-         (let [[kind x] fulfillment]
+         (let [[kind x] (s/conform ::fulfillment fulfillment)]
            (case kind
              :n (> (:fulfillment individual) x)
              :comp ((first x) (:fulfillment individual) (second x))))
@@ -131,7 +148,7 @@
          (let [[kind x] (s/conform ::passions passions)]
            (case kind
              :passion (contains? (:passions individual) x)
-             :set (empty? (reduce disj x (:passions individual)))
+             :set (empty? (reduce disj (set x) (:passions individual)))
              :comp ((first x) (:passions individual) (second x))))
          true)))
 
@@ -154,81 +171,20 @@
   :ret (s/nilable ::core/individuals))
 
 (defn get-cast [herd selects]
-  (reduce
-   (fn [selected select]
-     (if-let [individuals
-              (seq
-               (filter
-                (complement (partial contains? selected))
-                (find-individuals herd select)))]
-       (conj selected (rand-nth individuals))
-       (reduced nil)))
-   #{}
-   selects))
+  (seq
+   (reduce
+    (fn [selected select]
+      (if-let [individuals
+               (seq
+                (filter
+                 (complement (partial contains? selected))
+                 (find-individuals herd select)))]
+        (conj selected (rand-nth individuals))
+        (reduced nil)))
+    #{}
+    selects)))
 
 (s/fdef get-cast
   :args (s/cat :herd ::core/herd
                :selects (s/coll-of ::select))
-  :ret (s/nilable ::core/individualsi))
-
-(comment
-;; archived metadata regarding some buildings
-  (map
-   (fn [[infra skill required-skill stores terrain]]
-     (construction-project infra skill required-skill stores terrain))
-   [[:granary
-     :herbalism
-     10
-     {:wood 10 :stone 10 :tools 10}]
-    [:stadium
-     :athletics
-     20
-     {:wood 20 :tools 10}]
-    [:observatory
-     :organizing
-     50
-     {:wood 10 :stone 10 :tools 10}
-     :mountain]
-    [:quarry
-     :geology
-     50
-     {:wood 10 :stone 50 :tools 20}]
-    [:kitchen
-     :medicine
-     20
-     {:wood 10 :stone 10 :tools 10}]
-    [:workshop
-     :craftwork
-     20
-     {:wood 10 :stone 10 :tools 10}]
-    [:wind-forge
-     :craftwork
-     50
-     {:wood 100 :stone 100 :tools 100}
-     :jungle]
-    [:monsoon-bellows
-     :craftwork
-     75
-     {:bone 100 :stone 100 :tools 100}
-     :jungle]
-    [:temple
-     :organizing
-     100
-     {:wood 100 :stone 100 :tools 100}]
-    [:hospital
-     :medicine
-     50
-     {:wood 10 :stone 10 :tools 10}]
-    [:quern-generator
-     :craftwork
-     150
-     {:wood 10 :stone 100 :metal 100 :tools 50}]
-    [:hydroweight-battery
-     :craftwork
-     175
-     {:wood 50 :stone 200 :metal 150 :tools 50}]
-    [:mag-forge
-     :craftwork
-     200
-     {:wood 50 :stone 200 :metal 300 :tools 100}]])
-  )
+  :ret (s/nilable ::core/individuals))
