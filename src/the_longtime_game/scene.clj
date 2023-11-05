@@ -29,13 +29,13 @@
                 :detail "wow"
                 :filter {}
                 :selects [{}]
-                :text-fn (fn [& _] "OK")
-                :marshal-fn (fn [& _] nil)
-                :filter-fn (fn [& _] true)
-                :effect (fn [& _] nil)})))
+                :text-fn (constantly "OK")
+                :marshal-fn (constantly nil)
+                :filter-fn (constantly true)
+                :effect (constantly nil)})))
 
 (defn scene-may-occur?
-  [info herd {:keys [filter selects filter-fn]}]
+  [herd {:keys [filter selects filter-fn]}]
   (and (if filter
          (select/passes-filter? herd filter)
          true)
@@ -43,29 +43,27 @@
          (some? (select/get-cast herd selects))
          true)
        (if filter-fn
-         (filter-fn info herd)
+         (filter-fn herd)
          true)))
 
 (s/fdef scene-may-occur?
-  :args (s/cat :info ::core/info
-               :herd ::core/herd
+  :args (s/cat :herd ::core/herd
                :scene ::scene)
   :ret boolean?)
 
 (defn marshal-scene
   "Scene that may occur, prepares to occur."
-  [info herd {:keys [selects marshal-fn text-fn effect]
-              :or {selects []
-                   marshal-fn (constantly nil)
-                   text-fn (constantly nil)
-                   effect (constantly [info herd])}}]
+  [herd {:keys [selects marshal-fn text-fn effect]
+         :or {selects []
+              marshal-fn (constantly nil)
+              text-fn (constantly nil)
+              effect (fn [herd & _] herd)}}]
   (let [individuals (select/get-cast herd selects)
-        args (marshal-fn info herd individuals)]
-    [(partial text-fn info herd individuals args)
-     (partial effect info herd individuals args)]))
+        args (marshal-fn herd individuals)]
+    [(partial text-fn herd individuals args)
+     (partial effect herd individuals args)]))
 
 (s/fdef marshal-scene
-  :args (s/cat :info ::core/info
-               :herd ::core/herd
+  :args (s/cat :herd ::core/herd
                :scene ::scene)
   :ret (s/tuple ifn? ifn?))

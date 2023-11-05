@@ -12,28 +12,28 @@
    :text-fn dream-text/catharsis
    :selects [{:fulfillment [<= 30]}]
    :marshal-fn
-   (fn [_info _herd [sadcow]]
+   (fn [_herd [sadcow]]
      (-> sadcow :traits :depressed))
    :effect
-   (fn [info herd [sadcow] depressed?]
-     [info
+   (fn [herd [sadcow] depressed?]
+     (core/update-individual
+      herd
+      sadcow
       (if depressed?
-        (core/update-individual herd sadcow
-                                #(-> %
-                                     (update :traits conj :depressed)
-                                     (core/inc-fulfillment 20)))
-        (core/update-individual herd sadcow
-                                #(core/inc-fulfillment % 5)))])})
+        #(-> %
+             (update :traits conj :depressed)
+             (core/inc-fulfillment 20))
+        #(core/inc-fulfillment % 5))))})
 
 (def doubt
   {:name "Doubt"
    :text-fn dream-text/doubt
    :selects [{:traits :depressed}]
    :marshal-fn
-   (fn [_info _herd [sadcow]]
+   (fn [_herd [sadcow]]
      (rand-nth (vec (:passions sadcow))))
    :effect
-   (fn [_info herd [sadcow] dispassion & _]
+   (fn [herd [sadcow] dispassion & _]
      (if dispassion
        (core/update-individual
         herd
@@ -49,7 +49,7 @@
    :text-fn dream-text/gratitude
    :selects [{:fulfillment 70}]
    :effect
-   (fn [_info herd [happycow] & _]
+   (fn [herd [happycow] & _]
      (cond
        (-> happycow :traits :depressed)
        (core/update-individual herd happycow
@@ -69,14 +69,14 @@
    :text-fn dream-text/purpose
    :selects [{:max-passions 2}]
    :choices-fn
-   (fn [_info _herd [dreamer] _]
+   (fn [_herd [dreamer] _]
      (->> (:passions dreamer)
           (difference core/skills)
           vec
           shuffle
           (take 2)))
    :effect
-   (fn [_info herd [dreamer] _ skill]
+   (fn [herd [dreamer] _ skill]
      (core/update-individual
       herd
       dreamer
@@ -102,32 +102,30 @@
     #(g/elements dreams)))
 
 (defn pick-dream
-  [info herd]
+  [herd]
   (first
-   (filter (partial scene/scene-may-occur? info herd)
+   (filter (partial scene/scene-may-occur? herd)
            (shuffle dreams))))
 
 (s/fdef pick-dream
-  :args (s/cat :info ::core/info
-               :herd ::core/herd)
+  :args (s/cat :herd ::core/herd)
   :ret ::dream)
 
 (defn marshal-dream
-  [info herd {:keys [selects marshal-fn choices-fn text-fn post-text-fn effect]
-              :or {post-text-fn (constantly nil)
-                   marshal-fn (constantly nil)
-                   text-fn (constantly nil)
-                   effect (constantly herd)}}]
+  [herd {:keys [selects marshal-fn choices-fn text-fn post-text-fn effect]
+         :or {post-text-fn (constantly nil)
+              marshal-fn (constantly nil)
+              text-fn (constantly nil)
+              effect (constantly herd)}}]
   (let [individuals (select/get-cast herd selects)
-        args (marshal-fn info herd individuals)]
-    [(choices-fn info herd individuals args)
-     (partial text-fn info herd individuals args)
-     #(post-text-fn info %1 individuals args %2)
-     (partial effect info herd individuals args)]))
+        args (marshal-fn herd individuals)]
+    [(choices-fn herd individuals args)
+     (partial text-fn herd individuals args)
+     #(post-text-fn %1 individuals args %2)
+     (partial effect herd individuals args)]))
 
 (s/fdef marshal-dream
-  :args (s/cat :info ::core/info
-               :herd ::core/herd
+  :args (s/cat :herd ::core/herd
                :dream ::dream)
   :ret (s/tuple
         (s/coll-of any?)

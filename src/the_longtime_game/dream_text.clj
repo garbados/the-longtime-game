@@ -2,7 +2,7 @@
   (:require [the-longtime-game.text :refer [join-text]]))
 
 (defn catharsis
-  [_info _herd [sadcow] depressed?]
+  [_herd [sadcow] depressed?]
   (if depressed?
     (join-text
      "A bright morning finds" (:name sadcow) "buoyed by revelation."
@@ -22,7 +22,7 @@
      "Humbled, troubled, the minot presses on.")))
 
 (defn doubt
-  [_ _ [sadcow] dispassion & _]
+  [_ [sadcow] dispassion & _]
   (join-text
    "A spirit of dispassion seizes" (:name sadcow) "."
    "They have struggled to experience joy, to feel much at all."
@@ -47,7 +47,7 @@
    "I pray you will grant us continued fortune."))
 
 (defn purpose
-  [_ _ [dreamer] & _]
+  [_ [dreamer] & _]
   (join-text
    (:name dreamer) "wonders about their purpose."
    "Why do they exist?"

@@ -744,6 +744,37 @@
                :new-dead ::individuals)
   :ret ::herd)
 
+(defn perish [herd individual]
+  (-> (update herd :new-dead conj individual)
+      (update :individuals
+              #(vec (remove (partial = individual) %)))))
+
+(s/fdef perish
+  :args (s/cat :herd ::herd
+               :individual ::individual)
+  :ret ::herd)
+
+(defn begin-month
+  [herd]
+  (let [[journeyings deaths] (shift-population herd)
+        [new-adults new-dead] (calc-pop-changes herd journeyings deaths)]
+    (as-> herd $
+      (reduce
+       (fn [herd individual]
+         (perish herd individual))
+       $
+       new-dead)
+      (update $ :individuals concat new-adults)
+      (assoc $
+             :new-adults new-adults
+             :new-dead new-dead
+             :event nil
+             :projects []))))
+
+(s/fdef begin-month
+  :args (s/cat :herd ::herd)
+  :ret ::herd)
+
 (defn local-infra? [herd infra]
   (let [location (current-location herd)]
     (contains? (:infra location) infra)))
@@ -1198,45 +1229,6 @@
 (s/fdef should-add-syndicate?
   :args (s/cat :herd ::herd)
   :ret boolean?)
-
-(s/def ::new-adults (s/coll-of ::individual))
-(s/def ::new-dead (s/coll-of ::individual))
-(s/def :info/event (s/nilable string?))
-(s/def :info/projects (s/coll-of string?))
-(s/def :info/dreams (s/coll-of string?))
-
-(defn fresh-info
-  []
-  {:new-adults []
-   :new-dead []
-   :event nil
-   :projects []
-   :dreams []})
-
-;; month info. refreshes after month ends
-(s/def ::info
-  (s/with-gen
-    (s/keys :req-un [::new-adults
-                     ::new-dead
-                     :info/event
-                     :info/projects
-                     :info/dreams])
-    #(g/return (fresh-info))))
-
-(s/fdef fresh-info
-  :args (s/cat)
-  :ret ::info)
-
-(defn perish [info herd individual]
-  [(update info :new-dead conj individual)
-   (update herd :individuals
-           #(vec (remove (partial = individual) %)))])
-
-(s/fdef perish
-  :args (s/cat :info ::info
-               :herd ::herd
-               :individual ::individual)
-  :ret (s/tuple ::info ::herd))
 
 (defn herd-has-resource? [herd resource n]
   (<= n (get-in herd [:stores resource] 0)))

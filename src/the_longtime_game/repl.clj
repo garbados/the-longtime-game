@@ -8,7 +8,7 @@
             [the-longtime-game.project :as project]
             [the-longtime-game.remark :refer [gen-remarks]]
             [the-longtime-game.remark :as remark]
-            [the-longtime-game.text :refer [quote-text wrap-options
+            [the-longtime-game.text :refer [join-text quote-text wrap-options
                                             wrap-quote-text]]))
 
 (defn exit-game [& _] (System/exit 0))
@@ -238,27 +238,15 @@
            (str "│" prefix "─ " name*)))))
     (println "└────"))
 
-(defn marshal-info
-  [herd]
-  (let [[journeyings deaths] (core/shift-population herd)
-        [new-adults new-dead] (core/calc-pop-changes herd journeyings deaths)]
-    {:new-adults new-adults
-     :new-dead new-dead
-     :event nil
-     :projects []
-     :dreams []}))
-
 (defn cause-event
-  [info herd]
+  [herd]
   (if (zero? (rand-int 3))
-    (let [[name text-fn effect] (event/pick-event info herd)
-          blurb (text-fn)
-          [info herd] (effect)
-          info (assoc info :event name)]
+    (let [[name text-fn effect] (event/pick-event herd)
+          blurb (text-fn)]
       (println (wrap-quote-text blurb))
       (await-confirmation)
-      [info herd])
-    [info herd]))
+      (assoc (effect) :event name))
+    herd))
 
 (defn leave-behind-voluntarily
   [herd]
@@ -291,8 +279,9 @@
           [{:name "Dismantle infrastructue"
             :uses [:craftwork]
             :filter-fn
-            (fn [_ {:keys [infra]}]
-              (> (count infra) 0))
+            (fn [herd]
+              (let [infra (:infra (core/current-location herd))]
+                (> (count infra) 0)))
             :effect
             (fn [herd location]
               (let [infra (:infra location)
@@ -305,7 +294,7 @@
            {:name "Leave resources behind"
             :uses []
             :filter-fn
-            (fn [{:keys [stores]} _]
+            (fn [{:keys [stores]}]
               (> 0 (reduce
                     (fn [total [_ amount]]
                       (+ total amount))
@@ -316,7 +305,7 @@
               (leave-behind-voluntarily herd))}]))
 
 (defn select-project
-  [info herd]
+  [herd]
   (let [candidates
         (filter (partial project/can-enact? herd)
                 repl-projects)
@@ -330,25 +319,24 @@
               "Select a project to enact:"
               (keys name->candidate))
         candidate (name->candidate name)]
-    [(update info :projects conj name)
-     (project/do-project herd candidate)]))
+    (-> (project/do-project herd candidate)
+        (update :projects conj name))))
 
 (defn select-month-projects
-  [info herd]
+  [herd]
   (reduce
-   (fn [[info herd] i]
+   (fn [herd i]
      (print-herd herd)
      (println (quote-text (str "Project " (inc i) " of 3")))
-     (let [[info herd] (select-project info herd)]
-       [info herd]))
-   [info herd]
+     (select-project herd))
+   herd
    (range 3)))
 
 (defn answer-prayer
-  [info herd]
+  [herd]
   (if (= 0 (rand-int 3))
-    (let [dream (dream/pick-dream info herd)
-          [choices text-fn post-text-fn effect] (dream/marshal-dream info herd dream)
+    (let [dream (dream/pick-dream herd)
+          [choices text-fn post-text-fn effect] (dream/marshal-dream herd dream)
           blurb (text-fn)
           _ (println (wrap-quote-text blurb))
           choice (when (seq choices)
@@ -431,13 +419,13 @@
       herd)))
 
 (defn introduce-location
-  [info herd]
+  [herd]
   (let [location (core/current-location herd)
         steppe? (= :steppe (:terrain location))
         remarks (if steppe?
                   (remark/gen-remarks herd)
                   (string/join " " [(remark/gen-remarks herd)
-                                    (moment/gen-moments info herd)]))]
+                                    (moment/gen-moments herd)]))]
     (println (quote-text (str "The herd arrives at " (:name location) ".")))
     (println (wrap-quote-text remarks))
     (when steppe?
@@ -470,16 +458,15 @@
         [r1 r2] (map rand-nth remarks)]
     (println
      (wrap-quote-text
-      (string/join
-       " "
-       ["Record-keepers and rhetoricians rejoice!"
-        "Enthusiasts have joined together in debate and duel."
-        "They bicker and bother, sussing with susurrus"
-        "the finer points of some greater ethos."
-        (str "Through " r1 " and " r2 ",")
-        "a potent consensus emerges,"
-        "a bright and capable vision!"
-        (str "So is founded " (core/syndicate-name candidate) ".")])))))
+      (join-text
+       "Record-keepers and rhetoricians rejoice!"
+       "Enthusiasts have joined together in debate and duel."
+       "They bicker and bother, sussing with susurrus"
+       "the finer points of some greater ethos."
+       (str "Through " r1 " and " r2 ",")
+       "a potent consensus emerges,"
+       "a bright and capable vision!"
+       (str "So is founded " (core/syndicate-name candidate) "."))))))
 
 (defn maybe-add-syndicate
   [herd]
@@ -531,15 +518,16 @@
   [herd]
   (if (= :steppe (:terrain (core/current-location herd)))
     (choose-next-location herd)
-    (let [herd (core/consolidate-stores herd)
-          {:keys [new-adults new-dead] :as info} (marshal-info herd)
-          _ (introduce-location info herd)
+    (let [herd (core/begin-month herd)
+          herd (core/consolidate-stores herd)
+          {:keys [new-adults new-dead]} herd 
+          _ (introduce-location herd)
           _ (announce-pop-changes new-adults new-dead)
           herd (core/apply-pop-changes herd new-adults new-dead)
-          [info herd] (cause-event info herd)
-          [info herd] (select-month-projects info herd)
+          herd (cause-event herd)
+          herd (select-month-projects herd)
           herd (update-contacts herd)
-          herd (answer-prayer info herd)
+          herd (answer-prayer herd)
           herd (maybe-add-syndicate herd)
           herd (core/apply-herd-upkeep herd)
           herd (leave-behind herd)

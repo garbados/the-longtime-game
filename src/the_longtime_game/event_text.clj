@@ -21,7 +21,7 @@
    "stumbled half-starved"])
 
 (def crossed-paths
-  (fn [_ herd [orgcow] & _]
+  (fn [herd [orgcow] & _]
     (let [other-herd-name (rand-nth core/herd-names)]
       (string/join
        " "
@@ -39,7 +39,7 @@
         "in the folds of eternity."]))))
 
 (def depression-ends
-  (fn [_ _ [sadcow healcow] & _]
+  (fn [_ [sadcow healcow] & _]
     (let [therapy-adj
           (or (first (filter some? (map -trait->adj (:traits healcow))))
               "thoughtful")]
@@ -62,7 +62,7 @@
         (:name healcow) "asserts, \"Now and always.\""]))))
 
 (def fire!
-  (fn [_ _ [eepycow] infra]
+  (fn [_ [eepycow] infra]
     (if (keyword? infra)
       (string/join
        " "
@@ -86,12 +86,12 @@
       "")))
 
 (defn gruxnis-attack!
-  [info herd [victim ibba] & _]
+  [herd [victim ibba] & _]
   "TODO")
 
 (def journeying-ends
-  (fn [info herd & _]
-    (let [journeycow (first (:new-adults info))
+  (fn [herd & _]
+    (let [journeycow (first (:new-adults herd))
           spent-time (rand-nth -journeying-remarks)]
       (->> [(:name journeycow) "has come in from their journey."
             "A year ago, they set out from this very herd, to live apart from it"
@@ -102,7 +102,7 @@
            (string/join " ")))))
 
 (def offshoot-joins
-  (fn [_ herd & _]
+  (fn [herd & _]
     (let [reason (rand-nth -offshoot-reasons)]
       (string/join
        " "
@@ -116,7 +116,7 @@
         "May their faith be true."]))))
 
 (def plague
-  (fn [_ __ [individual] passed?]
+  (fn [_ [individual] passed?]
     (string/join
      " "
      (if passed?
@@ -139,7 +139,7 @@
         "\"Live on,\" they beg, \"For me. For everyone.\""]))))
 
 (def ration-rot
-  (fn [_ _ _ sanitarian]
+  (fn [_ _ sanitarian]
     (string/join
      " "
      (if sanitarian
@@ -170,7 +170,7 @@
         "That was never in doubt."]))))
 
 (def wound-healed
-  (fn [_ _ [sadcow healcow] & _]
+  (fn [_ [sadcow healcow] & _]
     (string/join
      " "
      ["Disability is produced by inaccessibility."

@@ -70,19 +70,18 @@
   (flatten
    (for [[trait moments] basic-moments]
      (for [text-fn moments]
-       {:text-fn (fn [_ _ [individual] & _] (text-fn (:name individual)))
+       {:text-fn (fn [_ [individual] & _] (text-fn (:name individual)))
         :selects [{:traits trait}]}))))
 
 (defn gen-moments
-  [info herd]
+  [herd]
   (->> (shuffle moment-scenes)
-       (filter (partial scene/scene-may-occur? info herd))
-       (map (partial scene/marshal-scene info herd))
+       (filter (partial scene/scene-may-occur? herd))
+       (map (partial scene/marshal-scene herd))
        (map (fn [[text-fn _]] (text-fn)))
        (take 2)
        (string/join " ")))
 
 (s/fdef gen-moments
-  :args (s/cat :info ::core/info
-               :herd ::core/herd)
+  :args (s/cat :herd ::core/herd)
   :ret string?)
