@@ -106,6 +106,7 @@
 (def ration-rot
   {:name "Ration Rot"
    :text-fn event-text/ration-rot
+   :filter {:stores {:rations 50}}
    :marshal-fn
    (fn [herd & _]
      (first (select/find-individuals herd {:skills {:medicine 3}})))

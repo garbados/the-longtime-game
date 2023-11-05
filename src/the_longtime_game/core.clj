@@ -589,9 +589,7 @@
              :path [[(init-location :plains)]
                     [(init-location :forest)]
                     [(init-location :mountain)]
-                    [(init-location :steppe)]
-                    [(init-location :swamp)]
-                    [(init-location :jungle)]]}))))
+                    [(init-location :steppe)]]}))))
 
 (def gen-herd (memoize -gen-herd))
 
@@ -725,6 +723,22 @@
                :deaths nat-int?)
   :ret (s/tuple ::individuals ::individuals))
 
+(defn apply-pop-changes
+  [herd new-adults new-dead]
+  (cond-> herd
+    (seq new-dead)
+    (update :individuals
+            #(vec (remove (partial contains? new-dead) %)))
+    (seq new-adults)
+    (update :individuals
+            (comp vec concat) new-adults)))
+
+(s/fdef apply-pop-changes
+  :args (s/cat :herd ::herd
+               :new-adults ::individuals
+               :new-dead ::individuals)
+  :ret ::herd)
+
 (defn perish [herd individual]
   (-> (update herd :new-dead conj individual)
       (update :individuals
@@ -739,18 +753,13 @@
   [herd]
   (let [[journeyings deaths] (shift-population herd)
         [new-adults new-dead] (calc-pop-changes herd journeyings deaths)]
-    (as-> herd $
-      (reduce
-       (fn [herd individual]
-         (perish herd individual))
-       $
-       new-dead)
-      (update $ :individuals concat new-adults)
-      (assoc $
-             :new-adults new-adults
-             :new-dead new-dead
-             :event nil
-             :projects []))))
+    (-> herd
+        (update :month inc)
+        (apply-pop-changes new-adults new-dead)
+        (assoc :new-adults new-adults
+               :new-dead new-dead
+               :event nil
+               :projects []))))
 
 (s/fdef begin-month
   :args (s/cat :herd ::herd)

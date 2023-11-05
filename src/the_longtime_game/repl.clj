@@ -241,11 +241,12 @@
 (defn cause-event
   [herd]
   (if (zero? (rand-int 3))
-    (let [[name text-fn effect] (event/pick-event herd)
-          blurb (text-fn)]
-      (println (wrap-quote-text blurb))
-      (await-confirmation)
-      (assoc (effect) :event name))
+    (if-let [[name text-fn effect] (event/pick-event herd)]
+      (do
+        (println (wrap-quote-text (text-fn)))
+        (await-confirmation)
+        (assoc (effect) :event name))
+      herd)
     herd))
 
 (defn leave-behind-voluntarily
@@ -519,10 +520,10 @@
 
 (defn do-month
   [herd]
+  (introduce-location herd)
   (if (= :steppe (:terrain (core/current-location herd)))
     (choose-next-location herd)
     (let [herd (core/begin-month herd)
-          _ (introduce-location herd)
           _ (announce-pop-changes herd)
           herd (core/consolidate-stores herd)
           herd (cause-event herd)
@@ -532,7 +533,6 @@
           herd (maybe-add-syndicate herd)
           herd (core/apply-herd-upkeep herd)
           herd (leave-behind herd)
-          herd (choose-next-location herd)
-          herd (core/inc-month herd)]
+          herd (choose-next-location herd)]
       (print-herd herd)
       herd)))

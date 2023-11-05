@@ -116,7 +116,8 @@
          :or {post-text-fn (constantly nil)
               marshal-fn (constantly nil)
               text-fn (constantly nil)
-              effect (constantly herd)}}]
+              effect (constantly herd)
+              choices-fn (constantly [])}}]
   (let [individuals (select/get-cast herd selects)
         args (marshal-fn herd individuals)]
     [(choices-fn herd individuals args)
