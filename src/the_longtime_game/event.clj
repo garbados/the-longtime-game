@@ -4,8 +4,7 @@
             [the-longtime-game.core :as core]
             [the-longtime-game.event-text :as event-text]
             [the-longtime-game.scene :as scene]
-            [the-longtime-game.select :as select]
-            [the-longtime-game.event :as event]))
+            [the-longtime-game.select :as select]))
 
 (def crossed-paths
   {:name "Crossed Paths"
@@ -51,19 +50,17 @@
      (let [location (core/current-location herd)]
        (pos-int? (count (:infra location)))))
    :marshal-fn
-   (fn [_ herd _]
-     (let [location (core/current-location herd)]
-       (rand-nth (vec (:infra location)))))
+   (fn [_ herd & _]
+     (when-let [infra (seq (:infra (core/current-location herd)))]
+       (rand-nth infra)))
    :effect
    (fn [info herd [individual] infra]
-     (let [location (core/current-location herd)
-           location* (update location :infra disj infra)]
-       [info
-        (-> herd
-            (core/assoc-location location*)
-            (core/update-individual
-             individual
-             #(update % :traits disj :weary)))]))})
+     [info
+      (-> herd
+          (core/update-current-location update :infra disj infra)
+          (core/update-individual
+           individual
+           #(update % :traits disj :weary)))])})
 
 (def gruxnis-attack!
   {:name "Grux'nis attack"
@@ -101,7 +98,7 @@
    :text-fn event-text/plague
    :selects [{}]
    :marshal-fn
-   (fn [_ herd]
+   (fn [_ herd & _]
      (let [population (count (:individuals herd))]
        (and (core/herd-has-resource? herd :poultices (* 1/3 population))
             (core/herd-has-skill? herd :medicine (* 1/4 population)))))
@@ -134,7 +131,7 @@
 (def wound-healed
   {:name "Wound Healed"
    :text-fn event-text/wound-healed
-   :selects [{:traits #{:wounded}} {:skills {:medicine 3 :craftwork 3}}]
+   :selects [{:traits :wounded} {:skills {:medicine 3 :craftwork 3}}]
    :filter {:stores {:poultices 5 :tools 5}}
    :effect
    (fn [info herd [hurtcow healcow] _]
@@ -151,8 +148,8 @@
   [depression-ends
    fire!
    gruxnis-attack!
-   plague
    ration-rot
+   plague
    wound-healed])
 
 (def general-events
@@ -173,12 +170,13 @@
         event (or (and (= 0 (rand-int 2))
                        (first (shuffle (filter event-may-occur? critical-events))))
                   (first (shuffle (filter event-may-occur? general-events))))]
-    (scene/marshal-scene info herd event)))
+    (when event
+      (concat [(:name event)] (scene/marshal-scene info herd event)))))
 
 (s/fdef pick-event
   :args (s/cat :info ::core/info
                :herd ::core/herd)
-  :ret ::event)
+  :ret (s/nilable (s/tuple string? ifn? ifn?)))
 
 (comment
   "Event ideas..."

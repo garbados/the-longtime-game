@@ -1,5 +1,6 @@
 (ns the-longtime-game.text 
-  (:require [clojure.string :as string]))
+  (:require [clojure.spec.alpha :as s]
+            [clojure.string :as string]))
 
 (def default-width 80)
 
@@ -11,6 +12,13 @@
        (filter #(pos-int? (count %)))
        (string/join " ")))
 
+(s/fdef join-text
+  :args (s/cat :s string?
+               :* (s/* string?))
+  :ret string?
+  :fn (fn [{:keys [ret]}]
+        (nil? (re-find #"\n" ret))))
+
 (defn collect-text
   [s]
   (for [p (string/split s #"\n\n")]
@@ -18,6 +26,10 @@
          (map string/trim)
          (filter (comp pos-int? count))
          (string/join "\n"))))
+
+(s/fdef collect-text
+  :args (s/cat :s string?)
+  :ret (s/coll-of string?))
 
 (defn wrap-text
   ([s]
@@ -41,6 +53,13 @@
      [[]]
      (string/split-lines s)))))
 
+(s/fdef wrap-text
+  :args (s/or
+         :default (s/cat :s string?)
+         :custom (s/cat :s string?
+                        :width pos-int?))
+  :ret (s/coll-of string?))
+
 (defn quote-text
   [s & {:keys [prefix width]
         :or {prefix ">"
@@ -57,6 +76,10 @@
         (for [line section]
           (str prefix " " line)))))))
 
+(s/fdef quote-text
+  :args (s/cat :s string?)
+  :ret string?)
+
 (defn wrap-quote-text
   [s & {:keys [prefix header footer width]
         :or {header "┌────"
@@ -68,20 +91,28 @@
                          :width width)]
     (string/join "\n" [header text footer])))
 
+(s/fdef wrap-quote-text
+  :args (s/cat :s string?)
+  :ret string?)
+
 (defn wrap-options
   [header options & {:keys [prefix prefix-h footer]
                      :or {prefix-h "┌"
                           prefix "├─"
                           footer "└────"}}]
-  (let [lines
-        (concat [(string/join " " [prefix-h header])]
-                (map
-                 (fn [option]
-                   (let [option*
-                         (if (keyword? option)
-                           (name option)
-                           option)]
-                     (string/join " " [prefix option*])))
-                 options)
-                [footer])]
-    (string/join "\n" lines)))
+  (string/join
+   "\n"
+   (concat [(string/join " " [prefix-h header])]
+           (for [option options]
+             (string/join
+              " "
+              [prefix
+               (cond
+                 (keyword? option) (name option)
+                 (string? option) option
+                 :else (str option))]))
+           [footer])))
+
+(s/fdef wrap-options
+  :args (s/cat :header string?
+               :options (s/coll-of any?)))

@@ -4,7 +4,8 @@
             [clojure.java.io :as io]
             [clojure.spec.alpha :as s]
             [the-longtime-game.core :as core]
-            [the-longtime-game.repl :as repl]))
+            [the-longtime-game.repl :as repl]
+            [the-longtime-game.text :as text]))
 
 (s/def ::spirit ::core/name)
 (s/def ::game (s/keys :req-un [::core/herd
@@ -27,7 +28,7 @@
 (defn new-game
   [& {:keys [forbidden]
       :or {forbidden #{}}}]
-  (println (repl/wrap-quote-text
+  (println (text/wrap-quote-text
             "Are you there, some enduring era
              of peace and plenty?
              Hard winters and bare summers
@@ -44,7 +45,7 @@
              I believe in you.
              I pray to you:
              tell me your name."
-            :width repl/default-width))
+            :width text/default-width))
   (let [spirit (repl/await-text "What shall the herd call you?"
                                 :forbidden forbidden
                                 :default "Longtime")
@@ -52,14 +53,14 @@
         game {:herd herd
               :spirit spirit}]
     (println
-     (repl/wrap-quote-text
+     (text/wrap-quote-text
       (str
        "A new thread of fate is woven in the name of the "
        spirit "!")
       :width 50))
     (save-game game spirit)
     (println
-     (repl/quote-text
+     (text/quote-text
       (str "Game saved as " (save-path spirit))
       :prefix "?"))
     (repl/print-herd herd)

@@ -23,13 +23,14 @@
 
 (defspec test-enact-project 20
   (props/for-all
-   [herd (s/gen ::core/herd)]
-   (g/let [project (g/such-that
-                    (fn [project]
-                      (project/can-enact? herd project))
-                    (s/gen ::project/project))]
-     (and
-      (is (s/valid? ::core/herd
-                    (project/enact-project herd project)))
-      (is (s/valid? ::core/herd
-                    (project/do-project herd project)))))))
+   [[herd project]
+    (g/such-that
+     (fn [[herd project]]
+       (project/can-enact? herd project))
+     (s/gen (s/tuple ::core/herd ::project/project))
+     100)]
+   (and
+    (is (s/valid? ::core/herd
+                  (project/enact-project herd project)))
+    (is (s/valid? ::core/herd
+                  (project/do-project herd project))))))

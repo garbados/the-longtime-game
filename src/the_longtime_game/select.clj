@@ -91,8 +91,8 @@
   :ret boolean?)
 
 (s/def ::comp?
-  (s/fspec :args (s/cat :n1 any?
-                        :n2 any?)
+  (s/fspec :args (s/cat :n1 int?
+                        :n2 int?)
            :ret boolean?))
 
 (s/def ::set-comp?
@@ -107,7 +107,7 @@
 (s/def ::passions
   (s/or :passion ::core/skill
         :set ::core/uses
-        :comp (s/tuple ::set-comp? (s/int-in 0 (inc core/max-passions)))))
+        :comp (s/tuple ::set-comp? any?)))
 
 (s/def ::traits
   (s/or :one core/traits
@@ -127,7 +127,7 @@
   (and (if (and traits (s/valid? ::traits traits))
          (let [[kind x] (s/conform ::traits traits)]
            (case kind
-             :one (-> individual :traits x)
+             :one (some? (-> individual :traits x))
              :many (every? some? (for [trait x]
                                    (-> individual :traits trait)))))
          true)

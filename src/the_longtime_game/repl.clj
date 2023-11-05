@@ -1,15 +1,15 @@
 (ns the-longtime-game.repl
   (:require [clojure.string :as string]
+            [the-longtime-game.contact-text :as contact-text]
             [the-longtime-game.core :as core]
+            [the-longtime-game.dream :as dream]
             [the-longtime-game.event :as event]
-            [the-longtime-game.moment :refer [gen-moments]]
+            [the-longtime-game.moment :as moment]
             [the-longtime-game.project :as project]
             [the-longtime-game.remark :refer [gen-remarks]]
-            [the-longtime-game.select :as select]
-            [the-longtime-game.text :refer [wrap-options
-                                            wrap-quote-text
-                                            quote-text]]
-            [the-longtime-game.contact-text :as contact-text]))
+            [the-longtime-game.remark :as remark]
+            [the-longtime-game.text :refer [quote-text wrap-options
+                                            wrap-quote-text]]))
 
 (defn exit-game [& _] (System/exit 0))
 
@@ -251,20 +251,13 @@
 (defn cause-event
   [info herd]
   (if (zero? (rand-int 3))
-    (let [{:keys [name marshal-fn text-fn effect] :as event}
-          (->> event/events
-               (filter
-                (partial event/can-event-trigger? info herd))
-               shuffle
-               first)
-          cast (select/get-cast herd event)
-          args (when marshal-fn
-                 (marshal-fn info herd))
-          blurb (text-fn info herd cast args)
+    (let [[name text-fn effect] (event/pick-event info herd)
+          blurb (text-fn)
+          [info herd] (effect)
           info (assoc info :event name)]
       (println (wrap-quote-text blurb))
       (await-confirmation)
-      (effect info herd cast args))
+      [info herd])
     [info herd]))
 
 (defn leave-behind-voluntarily
@@ -354,29 +347,21 @@
 (defn answer-prayer
   [info herd]
   (if (= 0 (rand-int 3))
-    (let [{:keys [marshal-fn
-                  choices-fn
-                  text-fn
-                  effect]
-           :as dream}
-          (->> event/dreams
-               (concat (:dreams info))
-               (filter
-                (partial event/can-dream-trigger? info herd))
-               shuffle
-               first)
-          cast (select/get-cast herd dream)
-          args (when marshal-fn
-                 (marshal-fn info herd cast))
-          blurb (text-fn info herd cast args)
-          choices (when choices-fn
-                    (choices-fn info herd cast args))]
-      (println (wrap-quote-text blurb))
-      (if choices
-        (let [choice
-              (select-from-options "How do you counsel?" choices)]
-          (effect info herd cast args choice))
-        (effect info herd cast args nil)))
+    (let [dream (dream/pick-dream info herd)
+          [choices text-fn post-text-fn effect] (dream/marshal-dream info herd dream)
+          blurb (text-fn)
+          _ (println (wrap-quote-text blurb))
+          choice (when (seq choices)
+                   (if (= 1 (count choices))
+                     (first choices)
+                     (select-from-options
+                      "How do you counsel?"
+                      choices)))
+          herd* (effect choice)
+          post-blurb (post-text-fn herd* choice)]
+      (when post-blurb
+        (println (wrap-quote-text post-blurb)))
+      herd*)
     herd))
 
 (defn choose-next-location
@@ -450,9 +435,9 @@
   (let [location (core/current-location herd)
         steppe? (= :steppe (:terrain location))
         remarks (if steppe?
-                  (gen-remarks herd)
-                  (string/join " " [(gen-remarks herd)
-                                    (gen-moments info herd)]))]
+                  (remark/gen-remarks herd)
+                  (string/join " " [(remark/gen-remarks herd)
+                                    (moment/gen-moments info herd)]))]
     (println (quote-text (str "The herd arrives at " (:name location) ".")))
     (println (wrap-quote-text remarks))
     (when steppe?

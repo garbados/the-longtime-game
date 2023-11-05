@@ -47,7 +47,7 @@
 (def gratitude
   {:name "Gratitude"
    :text-fn dream-text/gratitude
-   :selects [{:min-fulfillment 70}]
+   :selects [{:fulfillment 70}]
    :effect
    (fn [_info herd [happycow] & _]
      (cond
@@ -88,19 +88,16 @@
    gratitude
    purpose])
 
-(s/def ::choices-fn
-  (s/fspec :args (s/cat :info ::core/info
-                        :herd ::core/herd
-                        :individuals ::core/individuals
-                        :marshaled any?)
-           :ret any?))
+(s/def ::choices-fn ifn?)
+(s/def ::post-text-fn ifn?)
 
 (s/def ::dream
   (s/with-gen
     (s/and
      ::scene/scene
-     (s/keys :req-un [::scene/selects
-                      ::choices-fn])
+     (s/keys :req-un [::text-fn
+                      ::choices-fn]
+             :opt-un [::post-text-fn])
      #(pos-int? (count (:selects %))))
     #(g/elements dreams)))
 
@@ -116,11 +113,16 @@
   :ret ::dream)
 
 (defn marshal-dream
-  [info herd {:keys [selects marshal-fn choices-fn text-fn effect]}]
+  [info herd {:keys [selects marshal-fn choices-fn text-fn post-text-fn effect]
+              :or {post-text-fn (constantly nil)
+                   marshal-fn (constantly nil)
+                   text-fn (constantly nil)
+                   effect (constantly herd)}}]
   (let [individuals (select/get-cast herd selects)
         args (marshal-fn info herd individuals)]
     [(choices-fn info herd individuals args)
      (partial text-fn info herd individuals args)
+     #(post-text-fn info %1 individuals args %2)
      (partial effect info herd individuals args)]))
 
 (s/fdef marshal-dream
@@ -129,10 +131,9 @@
                :dream ::dream)
   :ret (s/tuple
         (s/coll-of any?)
-        (s/fspec :args (s/cat :choice any?)
-                 :ret string?)
-        (s/fspec :args (s/cat :choice any?)
-                 :ret string?)))
+        ifn?
+        ifn?
+        ifn?))
 
 (comment
   "Dream ideas..."

@@ -1,7 +1,7 @@
 (ns the-longtime-game.core
   (:require [clojure.spec.alpha :as s]
-            [clojure.string :as string]
-            [clojure.spec.gen.alpha :as g]))
+            [clojure.spec.gen.alpha :as g]
+            [clojure.string :as string]))
 
 (def resources #{:food
                  :rations
@@ -531,6 +531,10 @@
   :args (s/cat :terrain terrains)
   :ret ::location)
 
+(s/def ::spirit string?)
+(s/def ::new-adults (s/coll-of ::individual))
+(s/def ::new-dead (s/coll-of ::individual))
+(s/def ::projects (s/coll-of keyword?))
 (s/def ::contact contacts)
 (s/def ::contacts (s/coll-of ::contact :kind set?))
 (s/def ::space-infra space-infra)
@@ -547,13 +551,15 @@
 (s/def ::index nat-int?)
 (s/def ::month nat-int?)
 
-(defn gen-herd
-  ([& {:keys [name hunger sickness month individuals syndicates]
-       :or {name (rand-nth herd-names)
+(defn -gen-herd
+  ([& {:keys [spirit name hunger sickness month individuals syndicates]
+       :or {spirit "Longtime"
+            name (rand-nth herd-names)
             hunger 0
             sickness 0
             month 0}}]
    (let [herd {:name name
+               :spirit spirit
                :hunger hunger
                :sickness sickness
                :month month}
@@ -574,6 +580,9 @@
                         (assoc all resource 0))
                       {}
                       resources)
+             :new-adults []
+             :new-dead []
+             :projects []
              :contacts #{}
              :space #{}
              :index 0
@@ -584,9 +593,15 @@
                     [(init-location :swamp)]
                     [(init-location :jungle)]]}))))
 
+(def gen-herd (memoize -gen-herd))
+
 (s/def ::herd
   (s/with-gen
     (s/keys :req-un [::name
+                     ::spirit
+                     ::new-adults
+                     ::new-dead
+                     ::projects
                      ::contacts
                      ::space
                      ::individuals
@@ -597,8 +612,7 @@
                      ::index
                      ::month
                      ::path])
-    #(g/fmap (fn [_]
-               (gen-herd))
+    #(g/fmap (fn [_] (gen-herd))
              (g/return 0))))
 
 (s/fdef gen-herd
@@ -1190,13 +1204,6 @@
 (s/def :info/event (s/nilable string?))
 (s/def :info/projects (s/coll-of string?))
 (s/def :info/dreams (s/coll-of string?))
-;; month info. refreshes after month ends
-(s/def ::info
-  (s/keys :req-un [::new-adults
-                   ::new-dead
-                   :info/event
-                   :info/projects
-                   :info/dreams]))
 
 (defn fresh-info
   []
@@ -1205,6 +1212,16 @@
    :event nil
    :projects []
    :dreams []})
+
+;; month info. refreshes after month ends
+(s/def ::info
+  (s/with-gen
+    (s/keys :req-un [::new-adults
+                     ::new-dead
+                     :info/event
+                     :info/projects
+                     :info/dreams])
+    #(g/return (fresh-info))))
 
 (s/fdef fresh-info
   :args (s/cat)
