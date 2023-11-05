@@ -318,9 +318,12 @@
         name (select-from-options
               "Select a project to enact:"
               (keys name->candidate))
-        candidate (name->candidate name)]
-    (-> (project/do-project herd candidate)
-        (update :projects conj name))))
+        project (name->candidate name)
+        herd* (-> (project/do-project herd project)
+                  (update :projects conj name))]
+    (when (:text-fn project)
+      ((:text-fn project) herd*))
+    herd*))
 
 (defn select-month-projects
   [herd]
@@ -482,7 +485,7 @@
     herd))
 
 (defn announce-pop-changes
-  [new-adults new-dead]
+  [{:keys [new-adults new-dead]}]
   (when (seq new-adults)
     (let [plural? (< 1 (count new-adults))
           verb (if plural?
@@ -519,11 +522,9 @@
   (if (= :steppe (:terrain (core/current-location herd)))
     (choose-next-location herd)
     (let [herd (core/begin-month herd)
-          herd (core/consolidate-stores herd)
-          {:keys [new-adults new-dead]} herd 
           _ (introduce-location herd)
-          _ (announce-pop-changes new-adults new-dead)
-          herd (core/apply-pop-changes herd new-adults new-dead)
+          _ (announce-pop-changes herd)
+          herd (core/consolidate-stores herd)
           herd (cause-event herd)
           herd (select-month-projects herd)
           herd (update-contacts herd)

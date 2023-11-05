@@ -15,6 +15,7 @@
     `core/apply-herd-upkeep
     `core/assoc-location
     `core/becomes-passionate?
+    `core/begin-month
     `core/birth-chance
     `core/calculate-vote
     `core/carry-limit
@@ -30,7 +31,6 @@
     `core/enter-spring
     `core/enter-summer
     `core/enter-winter
-    `core/fresh-info
     `core/gains-experience?
     `core/gen-adult
     `core/gen-baby

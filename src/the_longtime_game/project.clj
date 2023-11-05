@@ -4,7 +4,8 @@
             [clojure.string :as string]
             [the-longtime-game.building :as building]
             [the-longtime-game.core :as core]
-            [the-longtime-game.select :as select]))
+            [the-longtime-game.select :as select]
+            [the-longtime-game.space-text :as space-text]))
 
 (def base-need 50)
 (def low-need 10)
@@ -39,27 +40,28 @@
 
 (def construction-projects
   (for [[name*
-         {:keys [description detail uses filter filter-fn]}]
+         {:keys [description detail uses filter filter-fn text-fn]}]
         building/building->info]
-    {:name (str "Construct " (building/building->name name*))
-     :description (str description " " detail)
-     :uses (cond
-             (nil? uses) #{:craftwork}
-             (keyword? uses) #{:craftwork uses}
-             (seq uses) uses)
-     :filter filter
-     :filter-fn
-     (fn [herd]
-       (let [location (core/current-location herd)]
-         (and
-          (not (contains? (:infra location) name*))
-          (> core/max-buildings (count (:infra location)))
-          (if filter-fn
-            (filter-fn herd)
-            true))))
-     :location-effect
-     (fn [location]
-       (update location :infra conj name*))}))
+    (cond-> {:name (str "Construct " (building/building->name name*))
+             :description (str description " " detail)
+             :uses (cond
+                     (nil? uses) #{:craftwork}
+                     (keyword? uses) #{:craftwork uses}
+                     (seq uses) uses)
+             :filter filter
+             :filter-fn
+             (fn [herd]
+               (let [location (core/current-location herd)]
+                 (and
+                  (not (contains? (:infra location) name*))
+                  (> core/max-buildings (count (:infra location)))
+                  (if filter-fn
+                    (filter-fn herd)
+                    true))))
+             :location-effect
+             (fn [location]
+               (update location :infra conj name*))}
+      text-fn (assoc :text-fn text-fn))))
 
 (defn gather-factory
   [n resources & {:keys [bonus-fn infra]
@@ -267,7 +269,9 @@
            (nil? (get-in % [:space :probe])))
      :effect
      #(-> (update % :space conj :probe)
-          (core/update-individuals core/inc-fulfillment 20))}
+          (core/update-individuals core/inc-fulfillment 20))
+     :text-fn
+     (constantly space-text/probe)}
     {:name "Launch permanent space station"
      :uses [:craftwork :organizing]
      :filter {:power 2
@@ -278,7 +282,9 @@
            (nil? (get-in % [:space :station])))
      :effect
      #(-> (update % :space conj :station)
-          (core/update-individuals core/inc-fulfillment 25))}
+          (core/update-individuals core/inc-fulfillment 25))
+     :text-fn
+     (constantly space-text/station)}
     {:name "Launch shipyard requisites"
      :uses [:craftwork :organizing]
      :filter {:power 8
@@ -292,7 +298,9 @@
      (fn [herd]
        (-> herd
            (update :space conj :shipyard)
-           (core/update-individuals core/inc-fulfillment 30)))}
+           (core/update-individuals core/inc-fulfillment 30)))
+     :text-fn
+     (constantly space-text/shipyard)}
     {:name "Launch ringworld requisites"
      :uses [:craftwork :organizing]
      :filter {:power 16
@@ -307,7 +315,9 @@
      (fn [herd]
        (-> herd
            (update :space conj :ringworld)
-           (core/update-individuals core/inc-fulfillment 40)))}
+           (core/update-individuals core/inc-fulfillment 40)))
+     :text-fn
+     (constantly space-text/ringworld)}
     {:name "Launch mobile ringworld requisites"
      :uses [:craftwork :organizing]
      :filter {:power 32
@@ -323,7 +333,9 @@
      (fn [herd]
        (-> herd
            (update :space conj :mobile-ringworld)
-           (core/update-individuals core/inc-fulfillment 50)))}
+           (core/update-individuals core/inc-fulfillment 50)))
+     :text-fn
+     (constantly space-text/mobile-ringworld)}
     {:name "Mag-smelt metal"
      :uses [:craftwork]
      :filter {:power 1
@@ -429,6 +441,9 @@
         :fn* (s/fspec
               :args (s/cat :herd ::core/herd)
               :ret boolean?)))
+(s/def ::text-fn
+  (s/fspec :args (s/cat :herd ::core/herd)
+           :ret string?))
 (s/def ::effect
   (s/or :fn ifn?
         :fn* (s/fspec
@@ -446,6 +461,7 @@
                      ::core/uses]
             :opt-un [::select/filter
                      ::filter-fn
+                     ::text-fn
                      ::effect
                      ::location-effect])
     #(g/elements projects)))
@@ -487,11 +503,10 @@
 
 (defn can-enact?
   [herd {:keys [filter-fn] :as project}]
-  (and
-   (select/passes-filter? herd (:filter project {}))
-   (if filter-fn
-     (filter-fn herd)
-     true)))
+  (and (select/passes-filter? herd (:filter project {}))
+       (if filter-fn
+         (filter-fn herd)
+         true)))
 
 (s/fdef can-enact?
   :args (s/cat :herd ::core/herd

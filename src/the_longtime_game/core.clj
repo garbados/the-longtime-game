@@ -725,25 +725,6 @@
                :deaths nat-int?)
   :ret (s/tuple ::individuals ::individuals))
 
-(defn apply-pop-changes
-  [herd new-adults new-dead]
-  (cond-> herd
-    (seq new-adults)
-    (update :individuals
-            (comp vec concat) new-adults)
-    (seq new-dead)
-    (update :individuals
-            (fn [individuals]
-              (->> individuals
-                   (remove #(contains? new-dead %))
-                   vec)))))
-
-(s/fdef apply-pop-changes
-  :args (s/cat :herd ::herd
-               :new-adults ::individuals
-               :new-dead ::individuals)
-  :ret ::herd)
-
 (defn perish [herd individual]
   (-> (update herd :new-dead conj individual)
       (update :individuals
