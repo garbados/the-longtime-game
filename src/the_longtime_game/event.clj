@@ -8,7 +8,7 @@
 
 (def crossed-paths
   {:name "Crossed Paths"
-   :selects [{:skills {:organizing 3}}]
+   :selects [{:skills {:organizing 4}} {:skills {:organizing 3}}]
    :text-fn event-text/crossed-paths
    :marshal-fn
    (fn [_ herd & _]

@@ -147,9 +147,9 @@
 (def max-skill (dec (count skill-ranks)))
 (def max-fulfillment 100)
 (def max-passions 3)
-(def experience-rate 20)
-(def passion-rate 10)
-(def fulfillment-rate 10)
+(def experience-rate 50)
+(def passion-rate 20)
+(def fulfillment-rate 2)
 (def fulfillment-decay 1)
 (def carry-modifier 3)
 (def org-threshold 10)
@@ -245,7 +245,8 @@
   [used {:keys [passions]}]
   (when (> max-passions (count passions))
     (when-let [candidates (seq (filter #(false? (contains? passions %)) used))]
-      (let [chance (rand-int (int (* passion-rate (count candidates))))]
+      (let [maximum-chance (int (* passion-rate (count candidates)))
+            chance (rand-int maximum-chance)]
         (when (< chance (count candidates))
           (nth candidates chance))))))
 
@@ -456,7 +457,10 @@
 
 (defn init-location
   [terrain]
-  (let [name* (name-location terrain)]
+  (let [name* (name-location terrain)
+        stores (if (not= terrain :steppe)
+                 (reduce #(assoc %1 %2 0) {} resources)
+                 {})]
     (case terrain
       :plains
       {:name name*
@@ -468,19 +472,22 @@
        :crop nil
        :wild? false
        :ready? false
-       :power 0}
+       :power 0
+       :stores stores}
       :forest
       {:name name*
        :terrain :forest
        :infra #{}
        :flora 1
        :depleted? false
-       :power 0}
+       :power 0
+       :stores stores}
       :mountain
       {:name name*
        :terrain :mountain
        :infra #{}
-       :power 0}
+       :power 0
+       :stores stores}
       :steppe
       {:name name*
        :terrain :steppe}
@@ -489,12 +496,14 @@
        :terrain :swamp
        :infra #{}
        :depleted? false
-       :power 0}
+       :power 0
+       :stores stores}
       :jungle
       {:name name*
        :terrain :jungle
        :infra #{}
-       :power 0})))
+       :power 0
+       :stores stores})))
 
 (s/def ::location
   (s/with-gen
@@ -551,7 +560,7 @@
 (s/def ::index nat-int?)
 (s/def ::month nat-int?)
 
-(defn -gen-herd
+(defn gen-herd
   ([& {:keys [spirit name hunger sickness month individuals syndicates]
        :or {spirit "Longtime"
             name (rand-nth herd-names)
@@ -591,8 +600,6 @@
                     [(init-location :mountain)]
                     [(init-location :steppe)]]}))))
 
-(def gen-herd (memoize -gen-herd))
-
 (s/def ::herd
   (s/with-gen
     (s/keys :req-un [::name
@@ -610,8 +617,9 @@
                      ::index
                      ::month
                      ::path])
-    #(g/fmap (fn [_] (gen-herd))
-             (g/return 0))))
+    (let [gen-herd* (memoize gen-herd)]
+      #(g/fmap (fn [_] (gen-herd*))
+               (g/return 0)))))
 
 (s/fdef gen-herd
   :args (s/keys* :opt-un [::name
@@ -703,7 +711,8 @@
   (let [population (-> herd :individuals count)
         optimal (calc-optimal-population herd)
         delta (- optimal population)
-        n (inc (Math/abs (int (/ delta pop-shift-per-delta))))]
+        n (inc (int (Math/abs (Math/log delta))))]
+    (println population optimal delta n)
     (if (> delta 0)
       [(rand-int n) (rand-int 2)]
       [(rand-int 2) (rand-int n)])))
@@ -753,9 +762,7 @@
   [herd]
   (let [[journeyings deaths] (shift-population herd)
         [new-adults new-dead] (calc-pop-changes herd journeyings deaths)]
-    (-> herd
-        (update :month inc)
-        (apply-pop-changes new-adults new-dead)
+    (-> (apply-pop-changes herd new-adults new-dead)
         (assoc :new-adults new-adults
                :new-dead new-dead
                :event nil
@@ -863,21 +870,12 @@
   [herd carrying]
   (let [leaving (merge-with - (:stores herd) carrying)]
     (-> (update herd :stores merge carrying)
-        (update-in [:path 0 (:index herd) :stores]
-                   (partial merge-with +) leaving))))
+        (update-current-location
+         #(update % :stores (partial merge-with +) leaving)))))
 
 (s/fdef keep-and-leave-behind
-  :args (s/with-gen
-          (s/cat :herd ::herd
-                 :carrying ::stores)
-          #(g/fmap (fn [herd]
-                     [herd
-                      (reduce
-                       (fn [all [resource amount]]
-                         (assoc all resource (rand-int amount)))
-                       {}
-                       (:stores herd))])
-                   (s/gen ::herd)))
+  :args (s/cat :herd ::herd
+               :carrying ::stores)
   :ret ::herd)
 
 (defn calc-food-need [population]
@@ -1093,14 +1091,10 @@
   :ret ::location)
 
 (defn inc-atomic-reactors
-  [path]
-  (vec
-   (for [stage path]
-     (vec
-      (for [location stage]
-        (if (contains? (:infra location) :atomic-reactor)
-          (update location :power inc)
-          location))))))
+  [location]
+  (if (contains? (:infra location) :atomic-reactor)
+    (update location :power inc)
+    location))
 
 (defn inc-season
   [herd old-season]
@@ -1126,22 +1120,26 @@
   :args (s/cat :herd ::herd)
   :ret ::herd)
 
-(defn inc-month [herd]
+(defn update-power
+  [herd]
+  (map-locations
+   herd
+   (fn [location]
+     (cond-> location
+       (not (contains? (:infra location) :stonetower-batteries))
+       (assoc :power 0)
+       (and (= 1 (get-season herd))
+            (contains? (:infra location) :chargepot-generator))
+       (update :power inc)))))
+
+(defn end-month [herd]
   (let [old-season (get-season herd)]
     (-> herd
         (update :month inc)
         (inc-season old-season)
         age-individuals
-        (update :path inc-atomic-reactors)
-        (map-locations
-         (fn [location]
-           (cond
-             (contains? (:infra location) :stonetower-batteries)
-             location
-             (contains? (:infra location) :chargepot-generator)
-             (update location :power min 1)
-             :else
-             (assoc location :power 0)))))))
+        (map-locations inc-atomic-reactors)
+        update-power)))
 
 (s/fdef inc-month
   :args (s/cat :herd ::herd)
@@ -1182,12 +1180,13 @@
 (defn update-individual-fulfillment
   [uses {:keys [passions] :as individual}]
   (if (seq uses)
-    (let [amount (int (/ fulfillment-rate (count uses)))
-          overlap (-> (partial contains? passions)
-                      (map uses)
-                      frequencies
-                      (get true 0))]
-      (inc-fulfillment individual (* amount overlap)))
+    (let [amount (int (/ fulfillment-rate (count uses)))]
+      (inc-fulfillment individual (reduce
+                                   +
+                                   0
+                                   (for [used uses
+                                         :when (contains? passions used)]
+                                     amount))))
     individual))
 
 (s/fdef update-individual-fulfillment
@@ -1203,7 +1202,7 @@
                            (:stores location {}))]
     (-> herd
         (assoc :stores stores)
-        (assoc-location (assoc location :stores {})))))
+        (update-current-location assoc :stores {}))))
 
 (s/fdef consolidate-stores
   :args (s/cat :herd ::herd)

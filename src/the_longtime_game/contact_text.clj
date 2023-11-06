@@ -86,9 +86,66 @@
     canopy and corpse.
     To align with it is to become a part of its awesome dominion."))
 
-(def dod-contact "TODO")
+(def dod-contact
+  (join-text
+   "Intrepid Dod explorers meet envoys of the herd at the local lodge.
+    On two long avian legs, sturdy dark-feathered characters
+    entreat diplomatically, materialistically.
+    \"We come in peace, on the diktat of the Consolidation Consortium,\"
+    their leader recites, \"On a mission to understand you.\"
+    They produce maps on the tables of the lodge,
+    and ask for assistance in making more maps.
+    With precise instruments, they seem intent on transcribing the world's span entire.
+    They prove equally interested in the herd's measurements of the stars,
+    inspiring the strangers to bring out even more maps, these of stranger sorts.
+    These Dods of the Consortium come from the glacial mountains of the northern pole,
+    where they have apparently been eking life from damp caves since time immemorial.
+    Now these hard-beaked, quant-minded birds have built flying contraptions
+    and deep-tunneled cities.
+    Worldly, they converse easily in Auter scripts;
+    prepared, an Auter translator accompanies them
+    to speak reflections of the words we do not yet share.
+    The clicks and grackling of their native tongue will remain a mystery,
+    but not for long.
+    Over fire and story, spiced wine and cracked nuts,
+    the explorers divulge the Consortium's greater ambitions:
+    \"I admit we desire the stars,\" one croaks, deep in the cups of their home-borne brews,
+    \"I have seen the mathematics to breach orbit.
+    I know the materials to reach those thresholds.
+    And I am not the only one.
+    The dream lives in many hearts,
+    and emerges through many beaks.
+    I think it is only a matter of time now.\"
+    An Auter raises a toast to the idea,
+    \"To possibilities! May we ever have the choice.\""
+   ))
 
-(def saurek-contact "TODO")
+(def saurek-contact
+  (join-text
+   "The boating clans have come.
+    A beachside lodge has been voted this year's destination,
+    and the shore is lined with the flotillas of the clans.
+    Tall bipedal reptiles step from their many-masted wooden crafts
+    onto silver sands, clasping hands with one another after long absences.
+    Bonfires spring up, turning the horizon orange even in the dead of night;
+    in their midst, celebration proves boundless. Dancing and singing,
+    exotic delicacies and a hundred artisanal grogs.
+    Meanwhile, by a crackling fire in the lodge's den,
+    clan heads plan in somber hisses the distribution of their respective resources.
+    Clans spread as they do to seek plenitude and wisdom
+    for the glory and wellbeing of the clanmothers and all their hatchlings;
+    thus, they must swap resources to stave privation as befits clanright,
+    but who, to whom, and how much, of what, is necessarily contentious.
+    No one goes hungry, not in centuries, but a clan without face
+    has been known to know lean years.
+    Borrowers, as they are known, are obliged to provide a gift for what is taken,
+    which provides an opportunity to attain face,
+    and in these meetings such things are also arranged.
+    But now, with such close proximity to the herd's syndicates,
+    more advanced material relations have developed and entrenched.
+    Minots load ships with goods and cherish gifted combs and earrings.
+    Such ties have proven enduring, and the sense of such colors the whole gathering.
+    Perhaps there will never be another lean year, the revelers dare to dream."))
 
 (def haroot-contact "TODO")
 

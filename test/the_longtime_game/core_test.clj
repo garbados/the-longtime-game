@@ -47,7 +47,7 @@
     `core/herd-has-nutrition?
     `core/inc-atomic-reactors
     `core/inc-fulfillment
-    `core/inc-month
+    `core/end-month
     `core/inc-season
     `core/inc-some-skill
     `core/individual-skill

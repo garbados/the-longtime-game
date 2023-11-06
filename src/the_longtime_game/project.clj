@@ -160,7 +160,7 @@
                      :bonus-fn flora-bonus)
      :location-effect deplete-land}
     {:name "Elongate path"
-     :uses []
+     :uses [:organizing]
      :filter {:skills {:organizing midgame-skill}}
      :effect
      (fn [herd _]
@@ -217,7 +217,12 @@
      :effect
      (gather-factory base-need [[:stone 1]
                                 [:ore 1/10]]
-                     :infra :quarry)}
+                     :infra :quarry
+                     :bonus-fn
+                     (fn [herd]
+                       (if (= :mountain (:terrain (core/current-location herd)))
+                         3/2
+                         1)))}
     {:name "Graze"
      :uses [:herbalism]
      :effect
@@ -258,7 +263,7 @@
      :filter-fn
      #(core/herd-has-nutrition? % 1/5)
      :effect
-     #(-> ((fulfillment-factory 2 :infra :stadium) %1 %2)
+     #(-> ((fulfillment-factory 3 :infra :stadium) %1 %2)
           (core/consume-nutrition base-need))}
     {:name "Launch probe"
      :uses [:craftwork :organizing]
@@ -369,7 +374,7 @@
      :uses [:organizing]
      :filter {:terrain :mountain}
      :effect
-     (fulfillment-factory 1 :infra :observatory)}
+     (fulfillment-factory 2 :infra :observatory)}
     {:name "Synthesize medicine"
      :uses [:medicine]
      :filter {:infra :hospital
@@ -425,13 +430,13 @@
      :uses [:herbalism]
      :filter {:terrain :forest
               :stores {:rations base-need}
-              :skills {:herbalism base-need}
-              :filter-fn
-              (fn [herd]
-                (let [location (core/current-location herd)]
-                  (core/herd-has-skill? herd
-                                       :herbalism
-                                       (* 100 (:flora location)))))}
+              :skills {:herbalism base-need}}
+     :filter-fn
+     (fn [herd]
+       (let [location (core/current-location herd)]
+         (core/herd-has-skill? herd
+                               :herbalism
+                               (* 100 (:flora location)))))
      :location-effect
      (fn [location]
        (update location :flora inc))}]))

@@ -6,10 +6,9 @@
             [the-longtime-game.event :as event]
             [the-longtime-game.moment :as moment]
             [the-longtime-game.project :as project]
-            [the-longtime-game.remark :refer [gen-remarks]]
             [the-longtime-game.remark :as remark]
             [the-longtime-game.text :refer [join-text quote-text wrap-options
-                                            wrap-quote-text]]))
+                                            wrap-quote-text match-prefix]]))
 
 (defn exit-game [& _] (System/exit 0))
 
@@ -108,13 +107,6 @@
    (println (quote-text prompt :prefix "!"))
    (handle-read-line (read-line))))
 
-(defn match-prefix
-  [l]
-  (concat
-   (map (constantly "├")
-        (range (dec (count l))))
-   ["└"]))
-
 (defn print-herd
   [{:keys [individuals syndicates] :as herd}]
   (let [population (count individuals)
@@ -125,23 +117,27 @@
              (string/join ", "))]
     (println "┌────")
     (println "├" (:name herd))
-    (let [month (:month herd)
-          season (-> herd core/get-season
-                     core/int->season)]
-      (println (str "├─ Month: " month " (" season ")")))
+    (let [month (rem (:month herd) 12)
+          year (inc (int (/ (:month herd) 12)))
+          season (core/int->season (core/get-season herd))]
+      (println (str "├─ " "Year " year ", month " month " (" season ")")))
     (println "├─ Population:" population)
     (println "├─ Syndicates:" syndicate-names)
-    (println "├─ Hunger:"
-             (:hunger herd)
-             (str "(-" (core/calc-food-need population) ")"))
-    (println "├─ Sickness:"
-             (as-> (:sickness herd) $
-               (/ $ population)
-               (* $ 100)
-               (float $)
-               (format "%.2f" $)
-               (str $ "%"))
-             (str "(-" (core/calc-meds-need population) ")"))
+    (let [need (core/calc-food-need population)
+          ok? (core/herd-has-nutrition? herd need)
+          ! (if ok? "" "!")]
+      (println "├─ Hunger:" (:hunger herd) (str "(-" need ! ")")))
+    (let [need (core/calc-meds-need population)
+          ok? (>= (get-in herd [:stores :poultices] 0) need)
+          ! (if ok? "" "!")]
+      (println "├─ Sickness:"
+               (as-> (:sickness herd) $
+                 (/ $ population)
+                 (* $ 100)
+                 (float $)
+                 (format "%.2f" $)
+                 (str $ "%"))
+               (str "(-" need ! ")")))
     (let [fulfillments (map :fulfillment (:individuals herd))
           average (as-> fulfillments $
                     (reduce + 0 $)
@@ -156,15 +152,8 @@
           strings
           (filter
            some?
-           [(when-let [infra (seq (:infra location))]
-              (string/join
-               "\n"
-               (concat [(str "┬ Infrastructure")]
-                       (let [prefixes (match-prefix infra)
-                             infra* (map vector infra prefixes)]
-                         (for [[i prefix] infra*
-                               :let [s (string/capitalize (name i))]]
-                           (str "││" prefix "─ " s))))))
+           [(when (pos-int? (:power location))
+              (str "─ Power: " (:power location)))
             (when (some? (:flora location))
               (str "─ Flora: " (:flora location)))
             (when (some? (:depleted? location))
@@ -186,7 +175,16 @@
             (when (some? (:ready? location))
               (str "─ Ready? " (:ready? location)))
             (when (some? (:wild? location))
-              (str "─ Wild? " (:wild? location)))])
+              (str "─ Wild? " (:wild? location)))
+            (when-let [infra (seq (:infra location))]
+              (string/join
+               "\n"
+               (concat [(str "┬ Infrastructure")]
+                       (let [prefixes (match-prefix infra)
+                             infra* (map vector infra prefixes)]
+                         (for [[i prefix] infra*
+                               :let [s (string/capitalize (name i))]]
+                           (str "│ " prefix "─ " s))))))])
           prefixes
           (match-prefix strings)
           first-prefix (if (seq strings) "┬" "─")]
@@ -343,6 +341,7 @@
           [choices text-fn post-text-fn effect] (dream/marshal-dream herd dream)
           blurb (text-fn)
           _ (println (wrap-quote-text blurb))
+          _ (await-confirmation)
           choice (when (seq choices)
                    (if (= 1 (count choices))
                      (first choices)
@@ -352,7 +351,8 @@
           herd* (effect choice)
           post-blurb (post-text-fn herd* choice)]
       (when post-blurb
-        (println (wrap-quote-text post-blurb)))
+        (println (wrap-quote-text post-blurb))
+        (await-confirmation))
       herd*)
     herd))
 
@@ -396,7 +396,7 @@
          core/carryable)]
     (if (> 0 remaining)
       (do
-        (println (quote-text (str "Carrying too much! Carry" remaining "less.")))
+        (println (quote-text (str "Carrying too much! Carry " remaining " less.")))
         (decide-carrying herd))
       (do
         (println
@@ -415,7 +415,7 @@
         location (core/current-location herd)
         location
         (if (core/local-infra? herd :granary)
-          (update location [:stores :food] #(if %1 (+ %1 %2) %2) leftovers)
+          (update location [:stores :food] + leftovers)
           location)
         herd (core/assoc-location herd location)]
     (if (core/must-leave-some? herd)
@@ -533,6 +533,7 @@
           herd (maybe-add-syndicate herd)
           herd (core/apply-herd-upkeep herd)
           herd (leave-behind herd)
-          herd (choose-next-location herd)]
+          herd (choose-next-location herd)
+          herd (core/end-month herd)]
       (print-herd herd)
       herd)))

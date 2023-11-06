@@ -89,7 +89,7 @@
      :detail "Safe homes become the dwelling places of strange allies."
      :uses :organizing
      :filter
-     {:stores {:wood 300 :stone 100 :tools 50}}}
+     {:stores {:wood 100 :stone 100 :tools 50}}}
     {:name :mag-forge
      :description "Automated forge using electro-magnets to purify metals."
      :detail "Use power to smelt metal."
@@ -116,7 +116,7 @@
      :detail "Improves the fulfillment of stargazing."
      :filter
      {:stores {:wood 10 :stone 10 :tools 10}
-      :skills {:craftwork 75}
+      :skills {:craftwork 50}
       :terrain :mountain}}
     {:name :quern-generator
      :description "A system of high-resistance rotary turbines, which volunteers turn to generate electricity."

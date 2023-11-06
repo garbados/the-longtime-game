@@ -4,6 +4,30 @@
 
 (def default-width 80)
 
+(defn normalize-name
+  [x]
+  (cond
+    (keyword? x) (name x)
+    (string? x)  x
+    :else        (str x)))
+
+(s/fdef normalize-name
+  :args (s/cat :x any?)
+  :ret string?)
+
+(defn match-prefix
+  [l & {:keys [mid-char end-char]
+        :or {mid-char "├"
+             end-char "└"}}]
+  (concat
+   (map (constantly mid-char)
+        (range (dec (count l))))
+   [end-char]))
+
+(s/fdef match-prefix
+  :args (s/cat :l (s/coll-of any?))
+  :ret (s/coll-of string?))
+
 (defn join-text
   [& s]
   (->> (string/join " " s)
@@ -60,6 +84,21 @@
                         :width pos-int?))
   :ret (s/coll-of string?))
 
+(defn quote-sections
+  [sections & {:keys [prefix]
+               :or {prefix ">"}}]
+  (string/join
+   (str "\n" prefix "\n")
+   (for [section sections]
+     (string/join
+      "\n"
+      (for [line section]
+        (str prefix " " line))))))
+
+(s/fdef quote-sections
+  :args (s/cat :sections (s/coll-of (s/coll-of string?)))
+  :ret string?)
+
 (defn quote-text
   [s & {:keys [prefix width]
         :or {prefix ">"
@@ -68,13 +107,7 @@
         sections (map
                   #(wrap-text % width*)
                   (collect-text s))]
-    (string/join
-     (str "\n" prefix "\n")
-     (for [section sections]
-       (string/join
-        "\n"
-        (for [line section]
-          (str prefix " " line)))))))
+    (quote-sections sections :prefix prefix)))
 
 (s/fdef quote-text
   :args (s/cat :s string?)
@@ -95,6 +128,19 @@
   :args (s/cat :s string?)
   :ret string?)
 
+(defn wrap-quote-sections
+  [sections & {:keys [prefix header footer]
+               :or {header "┌────"
+                    prefix "│"
+                    footer "└────"}}]
+  (let [text (quote-sections sections
+                             :prefix prefix)]
+    (string/join "\n" [header text footer])))
+
+(s/fdef wrap-quote-sections
+  :args (s/cat :sections (s/coll-of (s/coll-of string?)))
+  :ret string?)
+
 (defn wrap-options
   [header options & {:keys [prefix prefix-h footer]
                      :or {prefix-h "┌"
@@ -104,15 +150,38 @@
    "\n"
    (concat [(string/join " " [prefix-h header])]
            (for [option options]
-             (string/join
-              " "
-              [prefix
-               (cond
-                 (keyword? option) (name option)
-                 (string? option) option
-                 :else (str option))]))
+             (for [line (wrap-text (normalize-name option))]
+               (string/join
+                " "
+                [prefix
+                 line])))
            [footer])))
 
 (s/fdef wrap-options
   :args (s/cat :header string?
                :options (s/coll-of any?)))
+
+(defn match-section-prefixes
+  [lines & {:keys [one-char first-char mid-char end-char]
+            :or {one-char "─"
+                 first-char "┬"
+                 mid-char "│"
+                 end-char "└"}}]
+  (cond
+    (= 1 (count lines))
+    [one-char]
+    (< 1 (count lines))
+    (concat [first-char]
+            (match-prefix (rest lines)
+                          :mid-char mid-char
+                          :end-char end-char))))
+
+(defn wrap-section
+  [s & {:keys [width]
+        :or {width default-width}}]
+  (let [lines (wrap-text s width)
+        prefixes (match-section-prefixes lines)]
+    (string/join
+     "\n"
+     (for [[prefix line] (map vector prefixes lines)]
+       (str prefix " " line)))))

@@ -2,14 +2,9 @@
   (:gen-class)
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojure.spec.alpha :as s]
             [the-longtime-game.core :as core]
             [the-longtime-game.repl :as repl]
             [the-longtime-game.text :as text]))
-
-(s/def ::spirit ::core/name)
-(s/def ::game (s/keys :req-un [::core/herd
-                               ::spirit]))
 
 (def save-path-re #"longtime_save_(.+)\.edn")
 
@@ -18,8 +13,8 @@
   (str "longtime_save_" path ".edn"))
 
 (defn save-game
-  [game path]
-  (spit (save-path path) game))
+  [herd path]
+  (spit (save-path path) herd))
 
 (defn load-game
   [path]
@@ -49,22 +44,20 @@
   (let [spirit (repl/await-text "What shall the herd call you?"
                                 :forbidden forbidden
                                 :default "Longtime")
-        herd (core/gen-herd)
-        game {:herd herd
-              :spirit spirit}]
+        herd (core/gen-herd :spirit spirit)]
     (println
      (text/wrap-quote-text
       (str
        "A new thread of fate is woven in the name of the "
        spirit "!")
       :width 50))
-    (save-game game spirit)
+    (save-game herd spirit)
     (println
      (text/quote-text
       (str "Game saved as " (save-path spirit))
       :prefix "?"))
     (repl/print-herd herd)
-    game))
+    herd))
 
 (defn prompt-for-game
   [saves]
@@ -93,12 +86,11 @@
       (new-game))))
 
 (defn game-loop
-  [{:keys [herd spirit] :as game}]
+  [{:keys [spirit] :as herd}]
   (reduce
    (fn [herd _]
-     (let [herd* (repl/do-month herd)
-           game* (assoc game :herd herd*)]
-       (save-game game* spirit)
+     (let [herd* (repl/do-month herd)]
+       (save-game herd* spirit)
        herd*))
    herd
    (range)))
