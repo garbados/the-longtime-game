@@ -177,10 +177,18 @@
                           :end-char end-char))))
 
 (defn wrap-section
-  [s & {:keys [width]
-        :or {width default-width}}]
+  [s & {:keys [width one-char first-char mid-char end-char]
+        :or {width default-width
+             one-char "─"
+             first-char "┬"
+             mid-char "│"
+             end-char "└"}}]
   (let [lines (wrap-text s width)
-        prefixes (match-section-prefixes lines)]
+        prefixes (match-section-prefixes lines
+                                         :one-char one-char
+                                         :first-char first-char
+                                         :mid-char mid-char
+                                         :end-char end-char)]
     (string/join
      "\n"
      (for [[prefix line] (map vector prefixes lines)]
