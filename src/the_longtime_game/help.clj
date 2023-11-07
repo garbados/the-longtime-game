@@ -193,10 +193,10 @@
      (for [i (range (count (:path herd)))
            :let [stage (nth (:path herd) i)
                  lines
-                 (concat
-                  [(str "┬ Stage " (inc i))]
-                  (explain-stage stage)
-                  ["└────"])
+                 (flatten
+                  [(str "┬ Stage " (inc i))
+                   (explain-stage stage)
+                   "└────"])
                  prefixes (text/match-section-prefixes lines
                                                        :one-char "├"
                                                        :first-char "├"
@@ -231,57 +231,54 @@
      :end-char "│")))
 
 (defn individuals
-  ([herd]
-   (string/join
-    "\n"
-    [(str "┌ Population of " (:name herd))
-     (str "├─ Individuals: " (count (:individuals herd)))
-     (str "├─ Syndicates: " (string/join ", " (map core/syndicate-name (:syndicates herd))))
-     (let [individual (rand-nth (:individuals herd))]
-       (explain-individual herd individual :preface "Random: "))
-     (let [individual (first (sort (fn [i1 i2] (< (:fulfillment i1) (:fulfillment i2)))
-                                   (:individuals herd)))]
-       (explain-individual herd individual :preface "Unhappiest: "))
-     (let [traits (frequencies (reduce concat (map :traits (:individuals herd))))
-           traits (take 3 (sort (fn [[_ n1] [_ n2]] (> n1 n2)) traits))]
-       (str "├─ Common traits: "
-            (string/join
-             ", "
-             (for [[trait n] traits]
-               (str (name trait) ": " n)))))
-     (let [passions (frequencies (reduce concat (map :passions (:individuals herd))))
-           passions (take 3 (sort (fn [[_ n1] [_ n2]] (> n1 n2)) passions))]
-       (str "├─ Common passions: "
-            (string/join
-             ", "
-             (for [[passion n] passions]
-               (str (name passion) ": " n)))))
-     "└────"]))
-  ([herd query]
-   (let [pattern (re-pattern query)
-         find-pattern (partial re-find pattern)]
-     (string/join
-      "\n"
-      (flatten
-       [(str "┌ Individuals matching query: " query)
-        (->> (:individuals herd)
-             (filter (fn [individual]
-                       (or (find-pattern (:name individual))
-                           (seq (filter find-pattern (map name (:traits individual))))
-                           (seq (filter find-pattern (map name (:passions individual)))))))
-             (map (partial explain-individual herd)))
-        "└────"])))))
+  [herd]
+  (string/join
+   "\n"
+   [(str "┌ Population of " (:name herd))
+    (str "├─ Individuals: " (count (:individuals herd)))
+    (str "├─ Syndicates: " (string/join ", " (map core/syndicate-name (:syndicates herd))))
+    (let [individual (rand-nth (:individuals herd))]
+      (explain-individual herd individual :preface "Random: "))
+    (let [individual (first (sort (fn [i1 i2] (< (:fulfillment i1) (:fulfillment i2)))
+                                  (:individuals herd)))]
+      (explain-individual herd individual :preface "Unhappiest: "))
+    (let [traits (frequencies (reduce concat (map :traits (:individuals herd))))
+          traits (take 3 (sort (fn [[_ n1] [_ n2]] (> n1 n2)) traits))]
+      (str "├─ Common traits: "
+           (string/join
+            ", "
+            (for [[trait n] traits]
+              (str (name trait) ": " n)))))
+    (let [passions (frequencies (reduce concat (map :passions (:individuals herd))))
+          passions (take 3 (sort (fn [[_ n1] [_ n2]] (> n1 n2)) passions))]
+      (str "├─ Common passions: "
+           (string/join
+            ", "
+            (for [[passion n] passions]
+              (str (name passion) ": " n)))))
+    "└────"]))
 
 (defn search
   [herd query]
-  (let [pattern (re-pattern query)
+  (let [pattern (re-pattern (str "(?i)" query))
         find-pattern (partial re-find pattern)]
     (string/join
      "\n"
      [(projects
+       :preface (str "Projects matching: " query)
        :when
        #(->> (select-keys % [:name :description :detail])
              (map text/normalize-name)
              (filter find-pattern)
              seq))
-      (individuals herd query)])))
+
+      (string/join
+       "\n"
+       (flatten
+        [(str "┌ Individuals matching: " query)
+         (for [individual (:individuals herd)
+               :when (or (find-pattern (:name individual))
+                         (seq (filter find-pattern (map name (:traits individual))))
+                         (seq (filter find-pattern (map name (:passions individual)))))]
+           (explain-individual herd individual))
+         "└────"]))])))

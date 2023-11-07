@@ -710,7 +710,6 @@
         optimal (calc-optimal-population herd)
         delta (- optimal population)
         n (inc (int (Math/abs (Math/log delta))))]
-    (println population optimal delta n)
     (if (> delta 0)
       [(rand-int n) (rand-int 2)]
       [(rand-int 2) (rand-int n)])))

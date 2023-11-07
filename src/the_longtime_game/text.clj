@@ -148,14 +148,12 @@
                           footer "└────"}}]
   (string/join
    "\n"
-   (concat [(string/join " " [prefix-h header])]
-           (for [option options]
-             (for [line (wrap-text (normalize-name option))]
-               (string/join
-                " "
-                [prefix
-                 line])))
-           [footer])))
+   (flatten
+    [(str prefix-h " " header)
+     (for [option options]
+       (for [line (wrap-text (normalize-name option))]
+         (string/join " " [prefix line])))
+     footer])))
 
 (s/fdef wrap-options
   :args (s/cat :header string?

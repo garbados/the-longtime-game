@@ -41,9 +41,7 @@
              I pray to you:
              tell me your name."
             :width text/default-width))
-  (let [spirit (repl/await-text "What shall the herd call you?"
-                                :forbidden forbidden
-                                :default "Longtime")
+  (let [spirit (repl/await-text nil "What shall the herd call you?" :forbidden forbidden :default "Longtime")
         herd (core/gen-herd :spirit spirit)]
     (println
      (text/wrap-quote-text
@@ -62,9 +60,7 @@
 (defn prompt-for-game
   [saves]
   (let [new-game-s "[new game]"
-        spirit (repl/select-from-options
-                "Select a game to load"
-                (cons new-game-s saves))]
+        spirit (repl/select-from-options nil "Select a game to load" (cons new-game-s saves))]
     (if (= spirit new-game-s)
       (new-game :forbidden (set saves))
       (load-game spirit))))

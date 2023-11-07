@@ -4,21 +4,31 @@
             [the-longtime-game.core :as core]
             [the-longtime-game.dream :as dream]
             [the-longtime-game.event :as event]
+            [the-longtime-game.help :as help]
             [the-longtime-game.moment :as moment]
             [the-longtime-game.project :as project]
             [the-longtime-game.remark :as remark]
-            [the-longtime-game.text :refer [join-text quote-text wrap-options
-                                            wrap-quote-text match-prefix]]))
+            [the-longtime-game.text :refer [join-text match-prefix quote-text
+                                            wrap-options wrap-quote-text]]))
 
 (defn exit-game [& _] (System/exit 0))
 
 (def read-line-predicates
   {"exit" exit-game
-   "quit" exit-game})
+   "quit" exit-game
+   "intro" (fn [& _] (println help/introduction))
+   "credits" (fn [& _] (println help/credits))
+   "path" (fn [herd & _] (println (help/path herd)))
+   "projects" (fn [& _] (println (help/projects)))
+   "individuals" (fn [herd & _] (println (help/individuals herd)))
+   "search" (fn [herd query & _] (println (help/search herd query)))})
 
 (defn handle-read-line
-  [s]
-  (let [words (string/split s #" ")
+  [herd s]
+  (let [predicates (if (some? herd)
+                     read-line-predicates
+                     #{"quit" "exit"})
+        words (string/split s #" ")
         predicate (-> words
                       first
                       string/trim
@@ -29,34 +39,35 @@
         args (rest words)]
     (cond
       int-choice int-choice
-      (contains? read-line-predicates predicate)
-      (apply (read-line-predicates predicate) args)
-      :else
-      s)))
+      (contains? predicates predicate)
+      (or (apply (read-line-predicates predicate) herd args)
+          (handle-read-line herd (read-line)))
+      :else s)))
 
 (defn prompt-text
-  [& {:keys [prefix forbidden error]
-      :or {prefix "!"
-           forbidden #{}
-           error "That answer is not allowed."}}]
-  (let [answer (handle-read-line (read-line))]
+  [herd & {:keys [prefix forbidden error]
+           :or {prefix "!"
+                forbidden #{}
+                error "That answer is not allowed."}}]
+  (let [answer (handle-read-line herd (read-line))]
     (if (contains? forbidden answer)
       (do
         (println (quote-text error :prefix prefix))
-        (prompt-text :forbidden forbidden
+        (prompt-text herd
+                     :forbidden forbidden
                      :error error))
       answer)))
 
 (defn select-from-options
-  [prompt options & {:keys [may-cancel?]
-                     :or {may-cancel? false}}]
+  [herd prompt options & {:keys [may-cancel?]
+                          :or {may-cancel? false}}]
   (let [options (sort options)
         options* (->> options
                       (map #(if (keyword? %) (name %) %))
                       (map #(string/join ". " [(inc %1) %2])
                            (range (count options))))]
     (println (wrap-options prompt options*))
-    (let [answer (prompt-text)]
+    (let [answer (prompt-text herd)]
       (cond
         (and (int? answer)
              (< (dec answer) (count options)))
@@ -65,25 +76,26 @@
              (= answer "cancel"))
         nil
         :else
-        (select-from-options prompt options :may-cancel? may-cancel?)))))
+        (select-from-options herd prompt options :may-cancel? may-cancel?)))))
 
 (defn select-in-range
-  [prompt n & {:keys [default]}]
+  [herd prompt n & {:keys [default]}]
   (println (quote-text prompt :prefix "!"))
-  (let [answer (prompt-text)]
+  (let [answer (prompt-text herd)]
     (if (and (int? answer)
              (<= answer n))
       answer
       (or default
-          (select-in-range prompt n)))))
+          (select-in-range herd prompt n)))))
 
 (defn await-text
-  [prompt & {:keys [forbidden prefix default]
+  [herd prompt & {:keys [forbidden prefix default]
              :or {forbidden #{}
                   prefix "<"}}]
   (println (quote-text prompt :prefix "!"))
   (let [default-forbidden? (contains? forbidden default)
-        answer (prompt-text :prefix prefix
+        answer (prompt-text herd
+                            :prefix prefix
                             :forbidden forbidden)]
     (if (seq answer)
       (if (and (= answer default)
@@ -101,11 +113,11 @@
         default))))
 
 (defn await-confirmation
-  ([]
-   (await-confirmation "Press enter to proceed."))
-  ([prompt]
+  ([herd]
+   (await-confirmation herd "Press enter to proceed."))
+  ([herd prompt]
    (println (quote-text prompt :prefix "!"))
-   (handle-read-line (read-line))))
+   (handle-read-line herd (read-line))))
 
 (defn print-herd
   [{:keys [individuals syndicates] :as herd}]
@@ -242,7 +254,7 @@
     (if-let [[name text-fn effect] (event/pick-event herd)]
       (do
         (println (wrap-quote-text (text-fn)))
-        (await-confirmation)
+        (await-confirmation herd)
         (assoc (effect) :event name))
       herd)
     herd))
@@ -285,6 +297,7 @@
             (fn [herd location]
               (let [infra (:infra location)
                     choice (select-from-options
+                            herd
                             "Select infrastructure to dismantle:"
                             infra)]
                 (core/assoc-location
@@ -294,11 +307,7 @@
             :uses []
             :filter-fn
             (fn [{:keys [stores]}]
-              (> 0 (reduce
-                    (fn [total [_ amount]]
-                      (+ total amount))
-                    0
-                    (seq stores))))
+              (pos-int? (reduce max 0 (vals stores))))
             :effect
             (fn [herd _]
               (leave-behind-voluntarily herd))}]))
@@ -315,6 +324,7 @@
                 [(:name candidate) candidate]))
              (into {}))
         name (select-from-options
+              herd
               "Select a project to enact:"
               (keys name->candidate))
         project (name->candidate name)
@@ -341,18 +351,16 @@
           [choices text-fn post-text-fn effect] (dream/marshal-dream herd dream)
           blurb (text-fn)
           _ (println (wrap-quote-text blurb))
-          _ (await-confirmation)
+          _ (await-confirmation herd)
           choice (when (seq choices)
                    (if (= 1 (count choices))
                      (first choices)
-                     (select-from-options
-                      "How do you counsel?"
-                      choices)))
+                     (select-from-options herd "How do you counsel?" choices)))
           herd* (effect choice)
           post-blurb (post-text-fn herd* choice)]
       (when post-blurb
         (println (wrap-quote-text post-blurb))
-        (await-confirmation))
+        (await-confirmation herd))
       herd*)
     herd))
 
@@ -363,9 +371,7 @@
         (if (= 1 (count next-stage))
           0
           (let [names (map :name next-stage)
-                name (select-from-options
-                      "Where shall the herd go next?"
-                      names)]
+                name (select-from-options herd "Where shall the herd go next?" names)]
             (.indexOf names name)))]
     (core/next-location herd index)))
 
@@ -404,7 +410,7 @@
           "The herd will carry with it:"
           (for [[resource amount] (seq carrying)]
             (str (name resource) ": " amount))))
-        (if (select-from-options "OK?" [true false])
+        (if (select-from-options herd "OK?" [true false])
           (core/keep-and-leave-behind herd carrying)
           (decide-carrying herd))))))
 
@@ -434,7 +440,7 @@
     (println (wrap-quote-text remarks))
     (when steppe?
       (println (quote-text "The herd rushes unfettered across the steppe.")))
-    (await-confirmation)))
+    (await-confirmation herd)))
 
 (def syndicate-remarks
   {:athletics
@@ -480,7 +486,7 @@
       (if-let [candidate (core/select-candidate (:syndicates herd) candidates)]
         (do
           (announce-new-syndicate candidate)
-          (await-confirmation)
+          (await-confirmation herd)
           (update herd :syndicates conj candidate))
         herd))
     herd))
@@ -514,7 +520,7 @@
   (if (core/new-contact? herd)
     (let [contact (core/get-next-contact herd)]
       (println (wrap-quote-text (contact-text/contact->blurb contact)))
-      (await-confirmation)
+      (await-confirmation herd)
       (update herd :contacts conj contact))
     herd))
 
