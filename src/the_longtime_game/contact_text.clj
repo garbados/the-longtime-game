@@ -1,8 +1,8 @@
 (ns the-longtime-game.contact-text 
-  (:require [the-longtime-game.text :refer [join-text]]))
+  (:require [the-longtime-game.text :as text]))
 
 (def auter-contact
-  (join-text
+  (text/join-text
    "Rodents have taken up residence in the lodges, it seems.
     Hardly a meter tall, they come with roasted nuts and detailed tapestries,
     whose weaves encode formulas, algorithms, proofs, and arguments
@@ -19,7 +19,7 @@
     and the mysteries of death."))
 
 (def felidar-contact
-  (join-text
+  (text/join-text
    "Foreign traders have come. They arrange their wares outside the lodges,
     enticing the herd with delectable dumplings and artful pottery, fine combs and jewelry.
     They know Minots, it seems, as they speak easily in the tongues of the herd.
@@ -40,7 +40,7 @@
     they toast the possibility, indeed the certainty, of a bright future together."))
 
 (def harp-contact
-  (join-text
+  (text/join-text
    "Since even before the time of words,
     small birds have lived alongside the herds,
     plucking the flies and ticks that accumulate in Minot fur,
@@ -65,7 +65,7 @@
     to thrive together among the stars!"))
 
 (def er-sol-contact
-  (join-text
+  (text/join-text
    "The trees have always been alive, of course,
     since long before any mammal or avian or reptile walked the land.
     The ground itself is thick with their passing, thick *from* it,
@@ -87,7 +87,7 @@
     To align with it is to become a part of its awesome dominion."))
 
 (def dod-contact
-  (join-text
+  (text/join-text
    "Intrepid Dod explorers meet envoys of the herd at the local lodge.
     On two long avian legs, sturdy dark-feathered characters
     entreat diplomatically, materialistically.
@@ -121,7 +121,7 @@
    ))
 
 (def saurek-contact
-  (join-text
+  (text/join-text
    "The boating clans have come.
     A beachside lodge has been voted this year's destination,
     and the shore is lined with the flotillas of the clans.
