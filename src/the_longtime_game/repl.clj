@@ -16,7 +16,7 @@
 (def read-line-predicates
   {"exit" exit-game
    "quit" exit-game
-   "intro" (fn [& _] (println help/introduction))
+   "intro" (fn [herd & _] (println (help/introduction herd)))
    "credits" (fn [& _] (println help/credits))
    "path" (fn [herd & _] (println (help/path herd)))
    "projects" (fn [& _] (println (help/projects)))

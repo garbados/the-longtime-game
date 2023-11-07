@@ -4,7 +4,8 @@
             [clojure.java.io :as io]
             [the-longtime-game.core :as core]
             [the-longtime-game.repl :as repl]
-            [the-longtime-game.text :as text]))
+            [the-longtime-game.text :as text]
+            [the-longtime-game.help :as help]))
 
 (def save-path-re #"longtime_save_(.+)\.edn")
 
@@ -54,7 +55,8 @@
      (text/quote-text
       (str "Game saved as " (save-path spirit))
       :prefix "?"))
-    (repl/print-herd herd)
+    (println (help/introduction herd))
+    (repl/await-confirmation herd)
     herd))
 
 (defn prompt-for-game
