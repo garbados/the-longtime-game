@@ -1199,7 +1199,8 @@
                            (:stores location {}))]
     (-> herd
         (assoc :stores stores)
-        (update-current-location assoc :stores {}))))
+        (update-current-location
+         assoc :stores (reduce #(assoc %1 %2 0) {} resources)))))
 
 (s/fdef consolidate-stores
   :args (s/cat :herd ::herd)
