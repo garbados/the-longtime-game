@@ -86,16 +86,17 @@
      (string/join
       "\n"
       [(str "┌ Projects matching query: " query)
-       (for [project project/projects
-             :when (seq (filter find-pattern (select-keys project [:name :description :detail])))
-             :let [s (marshal-project-to-str project :width width)
-                   lines (string/split-lines s)
-                   prefixes (text/match-section-prefixes lines
-                                                         :first-char "├"
-                                                         :one-char "├"
-                                                         :end-char "│")]]
-         (for [[prefix line] (map vector prefixes lines)]
-           (str prefix line)))
+       (flatten
+        (for [project project/projects
+              :when (seq (filter find-pattern (map text/normalize-name (select-keys project [:name :description :detail]))))
+              :let [s (marshal-project-to-str project :width width)
+                    lines (string/split-lines s)
+                    prefixes (text/match-section-prefixes lines
+                                                          :first-char "├"
+                                                          :one-char "├"
+                                                          :end-char "│")]]
+          (for [[prefix line] (map vector prefixes lines)]
+            (str prefix line))))
        "└────"]))))
 
 (defn explain-location
@@ -198,15 +199,13 @@
     (map string/trim $)
     (text/wrap-quote-sections [$])))
 
-(defn introduction
-  [& _]
+(def introduction
   (text/wrap-quote-sections
    [["At the end of each month, you may be prompted to answer the prayers of your herd."]]))
 
-(defn credits
-  [& _]
+(def credits
   (text/wrap-quote-sections
-   [["THE LONGTIME, a game by Diana Fernanda Belle."
+   [["*The Longtime*, a game by Diana Fernanda Belle."
      "A love letter for a kinder world."
      "Special thanks to: Lucia Brody, Rimworld, Kitten Game, and Frostpunk."]]))
 
