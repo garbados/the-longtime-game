@@ -423,7 +423,7 @@
         location (core/current-location herd)
         location
         (if (core/local-infra? herd :granary)
-          (update location [:stores :food] + leftovers)
+          (update-in location [:stores :food] + leftovers)
           location)
         herd (core/assoc-location herd location)]
     (if (core/must-leave-some? herd)
