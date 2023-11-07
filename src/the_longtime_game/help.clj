@@ -6,6 +6,50 @@
             [the-longtime-game.select :as select]
             [the-longtime-game.text :as text]))
 
+(def terrain
+  (as->
+   "There are six types of terrain in the game:
+    - Plains: grow crops in spring, harvest in summer or fall.
+    - Forest: flora grows over time; gather deadfall for wood, or eat the land for food.
+    - Mountain: good for stone-gathering, spelunking, and stargazing.
+    - Steppe: rush overland easily; cross this stage without passing time.
+    - Jungle: a tropical rainforest; a thick and vicious green.
+    - Swamp: gather bog-iron once a year.
+    Each stage of the herd's migration path may have up to four locations.
+    Each location may have up to four constructed buildings."
+   $
+    (string/split $ #"\n")
+    (map string/trim $)
+    (text/wrap-quote-sections [$])))
+
+(def introduction
+  (text/wrap-quote-sections
+   [((comp text/wrap-text text/join-text)
+     "Hail, O Longtime! I am At'Tarish, the embodiment of time and volition.
+      A herd of Minots has prayed you into being; invested you with their hopes, and their skills.
+      It falls to you to shepherd them through the ages,
+      to decide, in subtle and decisive ways, where they go and what they do.")
+    ((comp text/wrap-text text/join-text)
+     "Minots have traversed the Gran-Imun-Yuliak supercontinent for eons,
+      in herds large and small, across ranges wide and narrow.
+      Their vast strength, rapid gallop, and four stomachs
+      have made them an herbivore atop a food chain.
+      Now an era of tools and crops begins to dawn,
+      while greater ambitions brew in the dreams
+      of humble ungulate-primates.")
+    ((comp text/wrap-text text/join-text)
+     "TODO projects, upkeep, travel")
+    ((comp text/wrap-text text/join-text)
+     "TODO events, dreams")
+    ((comp text/wrap-text text/join-text)
+     "At the end of each month, you may be prompted to answer the prayers of your herd.")]))
+
+(def credits
+  (text/wrap-quote-sections
+   [["*The Longtime*, a game by Diana Fernanda Belle."
+     "A love letter for a kinder world."
+     "Special thanks to: Lucia Brody, Rimworld, Kitten Game, and Frostpunk."]]))
+
 (defn explain-map
   [map*]
   (string/join
@@ -47,56 +91,35 @@
     (string/join "; " (filter some? sections))))
 
 (defn marshal-project-to-str
-  [project & {:keys [width]
-              :or {width text/default-width}}]
-  (text/wrap-section
-   (string/join
-    " "
-    (filter some?
-            [(str (:name project) ":")
-             (:description project)
-             (:detail project)
-             (when-let [uses (seq (:uses project))]
-               (str "Uses " (string/join ", " (map name uses)) "."))
-             (when-let [filter* (:filter project)]
-               (str "(" (explain-filter filter*) ")"))]))
-   :width width))
+  [project]
+  (string/join
+   " "
+   (filter some?
+           [(str (:name project) ":")
+            (:description project)
+            (:detail project)
+            (when-let [uses (seq (:uses project))]
+              (str "Uses " (string/join ", " (map name uses)) "."))
+            (when-let [filter* (:filter project)]
+              (str "(" (explain-filter filter*) ")"))])))
 
 (defn projects
-  ([]
-   (let [width (- text/default-width 4)]
-     (string/join
-      "\n"
-      (flatten
-       ["┌ Projects"
-        (for [project project/projects
-              :let [s (marshal-project-to-str project :width width)
-                    lines (string/split-lines s)
-                    prefixes (text/match-section-prefixes lines
-                                                          :first-char "├"
-                                                          :one-char "├"
-                                                          :end-char "│")]]
-          (for [[prefix line] (map vector prefixes lines)]
-            (str prefix line)))
-        "└────"]))))
-  ([query]
-    (let [pattern (re-pattern query)
-         find-pattern (partial re-find pattern)
-          width (- text/default-width 4)]
-     (string/join
-      "\n"
-      [(str "┌ Projects matching query: " query)
-       (flatten
-        (for [project project/projects
-              :when (seq (filter find-pattern (map text/normalize-name (select-keys project [:name :description :detail]))))
-              :let [s (marshal-project-to-str project :width width)
-                    lines (string/split-lines s)
-                    prefixes (text/match-section-prefixes lines
-                                                          :first-char "├"
-                                                          :one-char "├"
-                                                          :end-char "│")]]
-          (for [[prefix line] (map vector prefixes lines)]
-            (str prefix line))))
+  [& {:keys [preface when]
+      :or {when (constantly true)
+           preface "Projects"}}]
+  (let [width (- text/default-width 4)]
+    (string/join
+     "\n"
+     (flatten
+      [(str "┌ " preface)
+       (for [project project/projects
+             :let [lines (text/wrap-text (marshal-project-to-str project) width)]
+             :when (when project)]
+         (for [i (range (count lines))
+               :let [line (nth lines i)
+                     first? (zero? i)
+                     prefix (if first? "├─" "│")]]
+           (str prefix " " line)))
        "└────"]))))
 
 (defn explain-location
@@ -149,7 +172,18 @@
           "\n"
           (map str prefixes strings)))]))))
 
-(defn path->str
+(defn explain-stage
+  [stage]
+  (for [location stage
+        :let [lines (string/split-lines (explain-location location))
+              prefixes (text/match-section-prefixes lines
+                                                    :one-char "├"
+                                                    :first-char "├"
+                                                    :mid-char "││"
+                                                    :end-char "││")]]
+    (string/join "\n" (map str prefixes lines))))
+
+(defn path
   [herd]
   (string/join
    "\n"
@@ -159,55 +193,16 @@
      (for [i (range (count (:path herd)))
            :let [stage (nth (:path herd) i)
                  lines
-                 (for [location stage
-                       :let [lines (string/split-lines (explain-location location))
-                             prefixes (text/match-section-prefixes lines
-                                                                   :one-char "├"
-                                                                   :first-char "├"
-                                                                   :mid-char "││"
-                                                                   :end-char "││")]]
-                   (string/join
-                    "\n"
-                    (map str prefixes lines)))
-                 lines
                  (concat
                   [(str "┬ Stage " (inc i))]
-                  lines
+                  (explain-stage stage)
                   ["└────"])
                  prefixes (text/match-section-prefixes lines
                                                        :one-char "├"
                                                        :first-char "├"
                                                        :end-char "│")]]
-       (string/join
-        "\n"
-        (map str prefixes lines))))
+       (string/join "\n" (map str prefixes lines))))
     ["└────"])))
-
-(def terrain
-  (as->
-   "There are six types of terrain in the game:
-    - Plains: grow crops in spring, harvest in summer or fall.
-    - Forest: flora grows over time; gather deadfall for wood, or eat the land for food.
-    - Mountain: good for stone-gathering, spelunking, and stargazing.
-    - Steppe: rush overland easily; cross this stage without passing time.
-    - Jungle: a tropical rainforest; a thick and vicious green.
-    - Swamp: gather bog-iron once a year.
-    Each stage of the herd's migration path may have up to four locations.
-    Each location may have up to four constructed buildings."
-   $
-    (string/split $ #"\n")
-    (map string/trim $)
-    (text/wrap-quote-sections [$])))
-
-(def introduction
-  (text/wrap-quote-sections
-   [["At the end of each month, you may be prompted to answer the prayers of your herd."]]))
-
-(def credits
-  (text/wrap-quote-sections
-   [["*The Longtime*, a game by Diana Fernanda Belle."
-     "A love letter for a kinder world."
-     "Special thanks to: Lucia Brody, Rimworld, Kitten Game, and Frostpunk."]]))
 
 (defn explain-individual
   [herd individual & {:keys [preface]}]
@@ -267,17 +262,26 @@
          find-pattern (partial re-find pattern)]
      (string/join
       "\n"
-      [(str "┌ Individuals matching query: " query)
-       (->> (:individuals herd)
-            (filter (fn [individual]
-                      (or (find-pattern (:name individual))
-                          (seq (filter find-pattern (map name (:traits individual))))
-                          (seq (filter find-pattern (map name (:passions individual)))))))
-            (map (partial explain-individual herd))
-            (string/join "\n"))
-       "└────"]))))
+      (flatten
+       [(str "┌ Individuals matching query: " query)
+        (->> (:individuals herd)
+             (filter (fn [individual]
+                       (or (find-pattern (:name individual))
+                           (seq (filter find-pattern (map name (:traits individual))))
+                           (seq (filter find-pattern (map name (:passions individual)))))))
+             (map (partial explain-individual herd)))
+        "└────"])))))
 
 (defn search
   [herd query]
-  (or (projects query)
-      (individuals herd query)))
+  (let [pattern (re-pattern query)
+        find-pattern (partial re-find pattern)]
+    (string/join
+     "\n"
+     [(projects
+       :when
+       #(->> (select-keys % [:name :description :detail])
+             (map text/normalize-name)
+             (filter find-pattern)
+             seq))
+      (individuals herd query)])))
