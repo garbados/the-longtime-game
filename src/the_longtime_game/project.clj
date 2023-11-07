@@ -475,7 +475,8 @@
   [herd {:keys [uses]}]
   (let [update-passions
         (fn [individual]
-          (if-let [skill (core/becomes-passionate? uses individual)]
+          (if-let [skill (and (< 2 (rand-int core/passion-rate))
+                              (core/becomes-passionate? uses individual))]
             (update individual :passions conj skill)
             individual))
         update-proficiency

@@ -141,14 +141,13 @@
 (def max-age 50)
 (def adulthood 20)
 (def optimal-pops-per-stage 25)
-(def pop-shift-per-delta 10)
 (def max-hunger 4)
 (def max-buildings 4)
 (def max-skill (dec (count skill-ranks)))
 (def max-fulfillment 100)
 (def max-passions 3)
 (def experience-rate 50)
-(def passion-rate 20)
+(def passion-rate 10)
 (def fulfillment-rate 2)
 (def fulfillment-decay 1)
 (def carry-modifier 3)
@@ -245,10 +244,8 @@
   [used {:keys [passions]}]
   (when (> max-passions (count passions))
     (when-let [candidates (seq (filter #(false? (contains? passions %)) used))]
-      (let [maximum-chance (int (* passion-rate (count candidates)))
-            chance (rand-int maximum-chance)]
-        (when (< chance (count candidates))
-          (nth candidates chance))))))
+      (when (zero? (rand-int passion-rate))
+        (rand-nth candidates)))))
 
 (s/fdef becomes-passionate?
   :args (s/cat :used ::uses
@@ -573,7 +570,8 @@
                :sickness sickness
                :month month}
          individuals (or individuals
-                         (gen-individuals herd (+ 40 (rand-int 20))))
+                         (for [_ (range (+ 40 (rand-int 20)))]
+                           (gen-adult herd)))
          syndicates (or syndicates
                         (-> {:individuals individuals
                              :syndicates #{}}
