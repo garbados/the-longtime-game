@@ -270,7 +270,8 @@
                    0
                    (let [n (min amount remaining)
                          s (name resource)]
-                     (select-in-range (str "Leave behind how much " s "? "
+                     (select-in-range herd
+                                      (str "Leave behind how much " s "? "
                                            amount " " s "; " remaining " carryable.")
                                       n
                                       :default 0)))]
@@ -392,7 +393,8 @@
                    0
                    (let [n (min amount remaining)
                          s (name resource)]
-                     (select-in-range (str "Carry how much " s "? "
+                     (select-in-range herd
+                                      (str "Carry how much " s "? "
                                            amount " " s "; " remaining " carryable.")
                                       n
                                       :default amount)))]

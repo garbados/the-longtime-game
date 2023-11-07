@@ -94,4 +94,5 @@
    (range)))
 
 (defn -main [& _]
+  (println help/credits)
   (game-loop (launch-game)))

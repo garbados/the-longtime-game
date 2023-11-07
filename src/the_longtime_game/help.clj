@@ -6,22 +6,6 @@
             [the-longtime-game.select :as select]
             [the-longtime-game.text :as text]))
 
-(def terrain
-  (as->
-   "There are six types of terrain in the game:
-    - Plains: grow crops in spring, harvest in summer or fall.
-    - Forest: flora grows over time; gather deadfall for wood, or eat the land for food.
-    - Mountain: good for stone-gathering, spelunking, and stargazing.
-    - Steppe: rush overland easily; cross this stage without passing time.
-    - Jungle: a tropical rainforest; a thick and vicious green.
-    - Swamp: gather bog-iron once a year.
-    Each stage of the herd's migration path may have up to four locations.
-    Each location may have up to four constructed buildings."
-   $
-    (string/split $ #"\n")
-    (map string/trim $)
-    (text/wrap-quote-sections [$])))
-
 (defn introduction
   [herd]
   (text/wrap-quote-sections
@@ -63,7 +47,8 @@
      "Individuals in the herd have traits, passions, skills, and fulfillment.
       Check out `individuals` for details about your herd.
       You can also use `search [query]` to look for individuals by their name, traits, et al.
-      When individual fulfillment gets too low, unhappy folk will become weary and depressed.")
+      When individual fulfillment gets too low, unhappy folk will become weary and depressed.
+      On the other hand, happy individuals will tend to spread the love around.")
     ((comp #(map string/trim %) string/split-lines)
      "There are six types of terrain in the game:
       - Plains: grow crops in spring, harvest in summer or fall.
