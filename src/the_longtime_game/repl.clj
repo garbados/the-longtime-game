@@ -129,7 +129,7 @@
              (string/join ", "))]
     (println "┌────")
     (println "├" (:name herd))
-    (let [month (rem (:month herd) 12)
+    (let [month (inc (rem (:month herd) 12))
           year (inc (int (/ (:month herd) 12)))
           season (core/int->season (core/get-season herd))]
       (println (str "├─ " "Year " year ", month " month " (" season ")")))

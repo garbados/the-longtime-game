@@ -1,5 +1,6 @@
 (ns the-longtime-game.select 
   (:require [clojure.spec.alpha :as s]
+            [clojure.spec.gen.alpha :as g]
             [the-longtime-game.core :as core]))
 
 (s/def ::skills (s/map-of ::core/skill nat-int?))
@@ -90,15 +91,15 @@
                :filter ::filter)
   :ret boolean?)
 
-(s/def ::comp?
-  (s/fspec :args (s/cat :n1 int?
-                        :n2 int?)
-           :ret boolean?))
+(s/def ::comp? 
+  (s/with-gen
+    ifn?
+    #(g/return <)))
 
 (s/def ::set-comp?
-  (s/fspec :args (s/cat :set set?
-                        :x any?)
-           :ret boolean?))
+  (s/with-gen
+    ifn?
+    #(g/return contains?)))
 
 (s/def ::fulfillment
   (s/or :n ::core/fulfillment
