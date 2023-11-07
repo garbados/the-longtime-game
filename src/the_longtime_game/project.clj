@@ -43,7 +43,8 @@
          {:keys [description detail uses filter filter-fn text-fn]}]
         building/building->info]
     (cond-> {:name (str "Construct " (building/building->name name*))
-             :description (str description " " detail)
+             :description description
+             :detail detail
              :uses (cond
                      (nil? uses) #{:craftwork}
                      (keyword? uses) #{:craftwork uses}
@@ -102,6 +103,8 @@
         :let [[nutrients amount] (core/crop-info crop)
               nutrient-names (string/join ", " (map name nutrients))]]
     {:name (str "Plant " (name crop) " (" nutrient-names ")")
+     :description "Plant in spring; harvest in summer or fall."
+     :detail (str "Crop uses " amount " of each of its nutrients per year.")
      :uses [:herbalism]
      :filter (cond-> {:terrain :plains
                       :season 0}
@@ -126,6 +129,8 @@
                       [:bone  2]
                       [:metal 4]]]
     {:name (str "Manufacture " (name resource) " tools")
+     :description "Produce tools from " (name resource) "."
+     :detail "Better materials provide more tools!"
      :uses [:craftwork]
      :filter {:stores (assoc {} resource base-need)}
      :effect
@@ -138,12 +143,16 @@
    planting-projects
    manufacturing-projects
    [{:name "Cook rations"
+     :description "Prepare travel-ready meals that the herd can carry with it."
+     :detail "Food cannot be transported, but rations can."
      :uses [:medicine]
      :filter {:stores {:food base-need}}
      :effect
      (gather-factory base-need [[:rations 1]]
                      :infra :kitchen)}
     {:name "Cook rations mechanically"
+     :description "Using advanced mechanisms, automate much of the cooking process."
+     :detail "Produces more rations, but consumes tools and power."
      :uses [:medicine]
      :filter {:stores {:food base-need
                        :tools low-need}
@@ -152,6 +161,8 @@
      (gather-factory base-need [[:rations 2]]
                      :infra :kitchen)}
     {:name "Eat the land"
+     :description "Consume the forest's lower layers, converting detritus to rough calories."
+     :detail "Reduces the forest's flora, but higher flora produces more food."
      :uses [:herbalism]
      :filter {:terrain :forest}
      :filter-fn flora-filter
@@ -160,6 +171,8 @@
                      :bonus-fn flora-bonus)
      :location-effect deplete-land}
     {:name "Elongate path"
+     :description "Add another stage to the migration path."
+     :detail "Longer paths support larger herds."
      :uses [:organizing]
      :filter {:skills {:organizing midgame-skill}}
      :effect
@@ -173,11 +186,13 @@
                             [locations]
                             (subvec path 1)))))))}
     {:name "Explore"
+     :description "Add another location to the next stage of the path."
+     :detail "Each stage may have up to four locations, each of different terrain."
      :uses [:organizing]
      :filter {:skills {:organizing 20}}
      :filter-fn
      (fn [herd]
-       (>= 3 (count (second (:path herd)))))
+       (> 4 (count (second (:path herd)))))
      :effect
      (fn [herd _]
        (let [terrains (set (map :terrain (get-in herd [:path 1])))
@@ -441,6 +456,8 @@
      (fn [location]
        (update location :flora inc))}]))
 
+(s/def ::description string?)
+(s/def ::detail string?)
 (s/def ::filter-fn
   (s/or :fn ifn?
         :fn* (s/fspec
@@ -464,7 +481,9 @@
   (s/with-gen
     (s/keys :req-un [::core/name
                      ::core/uses]
-            :opt-un [::select/filter
+            :opt-un [::description
+                     ::detail
+                     ::select/filter
                      ::filter-fn
                      ::text-fn
                      ::effect

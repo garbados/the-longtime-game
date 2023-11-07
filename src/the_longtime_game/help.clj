@@ -60,6 +60,11 @@
       Each stage of the herd's migration path may have up to four locations.
       Each location may have up to four constructed buildings.")
     ((comp text/wrap-text text/join-text)
+     "Eventually, your herd will possess the skills to explore new locations,
+      and to elongate the migration path to accommodate a larger herd.
+      For now, you walk a small loop from plains to mountain and back again.
+      Use `path` to look at your whole migration path.")
+    ((comp text/wrap-text text/join-text)
      (str
       "Now you are ready to look after " (:name herd) ".
        Will you see them to new homes among the stars?
