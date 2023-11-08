@@ -185,7 +185,7 @@
                            infra* (map vector infra prefixes)]
                        (for [[i prefix] infra*
                              :let [s (string/capitalize (name i))]]
-                         (str "│ " prefix "─ " s))))))])
+                         (str "│" prefix "─ " s))))))])
         prefixes
         (text/match-prefix strings)
         first-prefix (if (seq strings) "┬" "─")]
