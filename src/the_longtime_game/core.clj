@@ -1016,13 +1016,6 @@
       (as-> location $
         (update-nutrients unused-nutrients -1 $)
         (assoc $ :ready? true)))
-    ;; crop goes wild
-    (and (true? (:ready? location))
-         (false? (:wild? location)))
-    (let [[nutrients amount] (crop-info (:crop location))]
-      (-> (update-nutrients nutrients amount location)
-          (assoc :wild? true
-                 :ready? false)))
     ;; crop stays wild
     (true? (:wild? location))
     (let [[nutrients amount] (crop-info (:crop location))]
