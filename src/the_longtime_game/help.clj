@@ -177,6 +177,12 @@
             (str "─ Ready? " (:ready? location)))
           (when (some? (:wild? location))
             (str "─ Wild? " (:wild? location)))
+          (when-let [stores (seq (filter (comp pos-int? second) (:stores location)))]
+            (str "─ Stores: "
+                 (string/join
+                  ", "
+                  (for [[resource amount] stores]
+                    (str (name resource) ": " amount)))))
           (when-let [infra (seq (:infra location))]
             (string/join
              "\n"
@@ -185,7 +191,7 @@
                            infra* (map vector infra prefixes)]
                        (for [[i prefix] infra*
                              :let [s (string/capitalize (name i))]]
-                         (str "│" prefix "─ " s))))))])
+                         (str " " prefix "─ " s))))))])
         prefixes
         (text/match-prefix strings)
         first-prefix (if (seq strings) "┬" "─")]

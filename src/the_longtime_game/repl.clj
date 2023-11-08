@@ -378,11 +378,12 @@
 
 (defn decide-carrying
   [herd]
-  (let [remaining (core/carry-limit herd)
+  (let [total (reduce #(+ %1 (second %2)) 0 (:stores herd))
+        remaining (core/carry-limit herd)
         _ (println
            (wrap-options
-            (str "The herd has too many goods to carry (" remaining ")")
-            (for [[resource amount] (seq (:stores herd))]
+            (str "The herd has too many goods to carry (" total ")")
+            (for [[resource amount] (:stores herd)]
               (str (name resource) ": " amount))))
         [remaining carrying]
         (reduce

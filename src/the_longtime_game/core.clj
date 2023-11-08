@@ -158,6 +158,7 @@
 (def contact-rate 2)
 (def max-flora 4)
 (def giftright-rate 20)
+(def vote-weight 2)
 
 (def crop->nutrients
   {:grapplewheat #{:n :k}
@@ -360,10 +361,10 @@
               #(string/ends-with? % "-syn")))
 
 (defn calculate-vote [individual skill]
-  (let [rank (get-in individual [:skills skill] 0)]
+  (let [weight (inc (get-in individual [:skills skill] 0))]
     (if (contains? (:passions individual) skill)
-      (* rank 2)
-      rank)))
+      (* weight vote-weight)
+      weight)))
 
 (s/fdef calculate-vote
   :args (s/cat :individual (s/keys :req-un [::skills
@@ -387,26 +388,26 @@
         (fn [all [skill vote]]
           (update all skill + vote))
         (reduce #(assoc %1 %2 0) {} skills))
-       (sort-by second >)))
+       (sort-by second >)
+       (map first)))
 
 (s/fdef tally-votes
   :args (s/cat :individuals (s/coll-of
                              (s/keys :req-un [::skills
                                               ::passions])))
-  :ret (s/coll-of (s/tuple ::skill nat-int?)))
+  :ret (s/coll-of ::skill :distinct true))
 
 (defn rank-candidates [votes]
-  (let [leader (-> votes first first)]
-    (if-let [runner (-> votes second first)]
-      (if (not= leader runner)
-        (conj (lazy-seq
-               (rank-candidates (rest votes)))
-              #{leader runner})
-        [])
+  (let [leader (first votes)]
+    (if-let [runner (second votes)]
+      (cons
+       #{leader runner}
+       (lazy-seq
+        (rank-candidates (rest votes))))
       [])))
 
 (s/fdef rank-candidates
-  :args (s/cat :votes (s/coll-of (s/tuple ::skill nat-int?)))
+  :args (s/cat :votes (s/coll-of ::skill :distinct true))
   :ret (s/coll-of ::syndicate))
 
 (defn select-candidate [syndicates candidates]
