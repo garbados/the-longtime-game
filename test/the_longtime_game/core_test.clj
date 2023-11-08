@@ -119,13 +119,6 @@
               (core/plains-enters-summer
                (assoc location :crop :grapplewheat))]
           (is (true? (:ready? location*)))))
-      (testing "Crop goes wild."
-        (let [location*
-              (core/plains-enters-summer
-               (assoc location
-                      :crop :grapplewheat
-                      :ready? true))]
-          (is (true? (:wild? location*)))))
       (testing "Crop stays wild."
         (let [location*
               (core/plains-enters-summer

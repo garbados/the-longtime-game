@@ -398,9 +398,11 @@
 (defn rank-candidates [votes]
   (let [leader (-> votes first first)]
     (if-let [runner (-> votes second first)]
-      (conj (lazy-seq
-             (rank-candidates (rest votes)))
-            #{leader runner})
+      (if (not= leader runner)
+        (conj (lazy-seq
+               (rank-candidates (rest votes)))
+              #{leader runner})
+        [])
       [])))
 
 (s/fdef rank-candidates
