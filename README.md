@@ -1,6 +1,6 @@
 # The Longtime
 
-![Tests passing?](https://github.com/github/docs/actions/workflows/tests.yml/badge.svg)
+![Tests passing?](https://github.com/github/docs/actions/workflows/tests.yaml/badge.svg)
 
 A game about change and minotaurs. See the [introduction](./doc/intro.md) for more information.
 
