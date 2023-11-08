@@ -279,14 +279,14 @@
      #(core/herd-has-nutrition? % 1/5)
      :effect
      #(-> ((fulfillment-factory 3 :infra :stadium) %1 %2)
-          (core/consume-nutrition base-need))}
+          (core/consume-nutrition 1/5))}
     {:name "Launch probe"
      :uses [:craftwork :organizing]
      :filter {:power 2
-              :stores {:metal 500 :tools 1000}}
+              :stores {:metal 500 :tools 1000}
+              :infra :mag-launchpad}
      :filter-fn
-     #(and (core/local-infra? % :mag-launchpad)
-           (nil? (get-in % [:space :probe])))
+     #(nil? (get-in % [:space :probe]))
      :effect
      #(-> (update % :space conj :probe)
           (core/update-individuals core/inc-fulfillment 20))

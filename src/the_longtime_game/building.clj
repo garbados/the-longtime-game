@@ -89,7 +89,7 @@
      :detail "Safe homes become the dwelling places of strange allies."
      :uses :organizing
      :filter
-     {:stores {:wood 100 :stone 100 :tools 50}}}
+     {:stores {:bone 20 :wood 20 :stone 20 :tools 20}}}
     {:name :mag-forge
      :description "Automated forge using electro-magnets to purify metals."
      :detail "Use power to smelt metal."

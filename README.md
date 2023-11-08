@@ -1,5 +1,7 @@
 # The Longtime
 
+![Build and Test](https://github.com/garbados/the-longtime-game/actions/workflows/tests.yaml/badge.svg)
+
 A game about change and minotaurs. See the [introduction](./doc/intro.md) for more information.
 
 **CURRENT STATUS: PRE-ALPHA**
