@@ -1,6 +1,6 @@
 # *The Longtime*: Minots
 
-Minot herds have roamed the Guran-Yuliak supercontinent for millions of years, primarily as herds of ungulate-primates behaviorally indistinct from the goats and sheep and bears of their environs. But over time, something changed. They remember it as *the moment of the word*.
+Minot herds have roamed the Guran-Imun-Yuliak supercontinent for millions of years, primarily as herds of ungulate-primates behaviorally indistinct from the goats and sheep and bears of their environs. But over time, something changed. They remember it as *the moment of the word*.
 
 *Before the word, there was only deed and feeling and feeling driving deed and deed sewing feeling. Our feet crossed continents in wakeless dream for sleepless eons, trampling the earth, spreading seeds and creating fecund reaches from sea to sea.*
 

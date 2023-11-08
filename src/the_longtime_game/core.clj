@@ -372,21 +372,21 @@
   :ret nat-int?)
 
 (defn tally-votes [individuals]
-  (->> individuals
-       (map
-        (fn [individual]
-          (reduce
-           (fn [all skill]
-             (assoc all skill
-                    (calculate-vote individual skill)))
-           {}
-           skills)))
+  (->> (map
+        #(->> skills
+              (reduce
+               (fn [all skill]
+                 (assoc all skill
+                        (calculate-vote % skill)))
+               {})
+              (sort-by second >)
+              (take 3))
+        individuals)
+       (reduce concat [])
        (reduce
-        (fn [votes vote]
-          (for [[skill value] votes]
-            [skill (+ value (get vote skill 0))]))
-        (for [skill skills]
-          [skill 0]))
+        (fn [all [skill vote]]
+          (update all skill + vote))
+        (reduce #(assoc %1 %2 0) {} skills))
        (sort-by second >)))
 
 (s/fdef tally-votes
@@ -398,11 +398,9 @@
 (defn rank-candidates [votes]
   (let [leader (-> votes first first)]
     (if-let [runner (-> votes second first)]
-      (if (not= leader runner)
-        (conj (lazy-seq
-               (rank-candidates (rest votes)))
-              #{leader runner})
-        [])
+      (conj (lazy-seq
+             (rank-candidates (rest votes)))
+            #{leader runner})
       [])))
 
 (s/fdef rank-candidates
