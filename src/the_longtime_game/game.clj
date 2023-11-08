@@ -21,6 +21,25 @@
   [path]
   (edn/read-string (slurp (save-path path))))
 
+(defn delete-game
+  [path]
+  (io/delete-file (save-path path)))
+
+(defn end-game
+  [{:keys [spirit]}]
+  (println
+   (text/wrap-quote-text
+    "After a year of growling bellies, the herd disbands.
+     Starvation terrifies the masses, and the stampede that once encompassed you
+     now spills across the land, unmarshaled, uncontrolled.
+     Adults and children alike flee to seek more fecund ways
+     among other herds. The shared dream you embody shatters.
+     Eternity welcomes the wreckage of you back into its folds,
+     to be resewn into new visions and stranger futures
+     for another, luckier, pluckier herd.
+     [GAME OVER]"))
+  (delete-game spirit))
+
 (defn new-game
   [& {:keys [forbidden]
       :or {forbidden #{}}}]
@@ -87,9 +106,13 @@
   [{:keys [spirit] :as herd}]
   (reduce
    (fn [herd _]
-     (let [herd* (repl/do-month herd)]
-       (save-game herd* spirit)
-       herd*))
+     (if-let [herd* (repl/do-month herd)]
+       (do
+         (save-game herd* spirit)
+         herd*)
+       (do
+         (end-game herd)
+         (reduced nil))))
    herd
    (range)))
 

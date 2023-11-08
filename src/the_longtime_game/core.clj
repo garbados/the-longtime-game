@@ -908,9 +908,9 @@
                (map #(update % :fulfillment + fulfillment-change)
                     individuals))
         (cond->
-         hunger? (update :hunger (comp #(min (dec max-hunger) %) inc))
+         hunger? (update :hunger inc)
          (not hunger?) (assoc :hunger 0)
-         sickness? (assoc :sickness poultice-deficit)
+         sickness? (update :sickness + poultice-deficit)
          (not sickness?) (assoc :sickness 0)))))
 
 (s/fdef apply-herd-upkeep
@@ -1287,7 +1287,7 @@
   (>= (+ (get-in herd [:stores :food] 0)
          (get-in herd [:stores :rations] 0))
       (if (> 1 n 0)
-        (* n (count (:individuals herd)))
+        (int (* (count (:individuals herd)) n))
         n)))
 
 (s/fdef herd-has-nutrition?
@@ -1297,7 +1297,10 @@
 
 (defn consume-nutrition
   [herd n]
-  (let [remaining-food (- (get-in herd [:stores :food] 0) n)
+  (let [n (if (< 0 n 1)
+            (int (* (count (:individuals herd)) n))
+            n)
+        remaining-food (- (get-in herd [:stores :food] 0) n)
         remaining-rations
         (if (< remaining-food 0)
           (+ (get-in herd [:stores :rations] 0)

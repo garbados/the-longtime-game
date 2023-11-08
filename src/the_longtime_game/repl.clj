@@ -539,9 +539,10 @@
           herd (update-contacts herd)
           herd (answer-prayer herd)
           herd (maybe-add-syndicate herd)
-          herd (core/apply-herd-upkeep herd)
-          herd (leave-behind herd)
-          herd (choose-next-location herd)
-          herd (core/end-month herd)]
-      (print-herd herd)
-      herd)))
+          herd (core/apply-herd-upkeep herd)]
+      (when-not (core/has-lost? herd)
+        (let [herd (leave-behind herd)
+              herd (choose-next-location herd)
+              herd (core/end-month herd)]
+          (print-herd herd)
+          herd)))))
