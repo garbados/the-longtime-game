@@ -149,6 +149,13 @@
      {:stores {:wood 10 :stone 50 :tools 20}
       :skills {:craftwork 50 :geology 50}
       :terrain :mountain}}
+    {:name :railways
+     :description "A complex system of transport-tracks connecting a portion of the continent."
+     :detail "Increases the herd's carry limit considerably."
+     :uses :craftwork
+     :filter
+     {:stores {:metal 1000 :tools 1000}
+      :skills {:craftwork 500}}}
     {:name :stadium
      :description "A great arena for displays and contests of bodily and theatric excellence!"
      :detail "Improves the fulfillment of festivals."

@@ -846,7 +846,8 @@
 (defn carry-limit
   [herd]
   (* (collective-labor herd :athletics)
-     carry-modifier))
+     carry-modifier
+     (if (local-infra? herd :railways) 3 1)))
 
 (s/fdef carry-limit
   :args (s/cat :herd ::herd)
