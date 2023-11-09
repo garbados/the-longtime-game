@@ -111,9 +111,26 @@
            (range (count core/contacts)))]
       (is (= (count (:contacts herd*)) (count core/contacts))))))
 
+(deftest test-locations-across-seasons
+  (testing "Terrain across the seasons."
+    (let [herd
+          (reduce
+           (fn [herd _]
+             (let [old-season (core/get-season herd)]
+               (-> (update herd :month inc)
+                   (core/inc-season old-season))))
+           (assoc (core/gen-herd) :path [(vec (map core/init-location core/terrains))])
+           (range 12))]
+      (is (s/valid? ::core/herd herd)))))
+
 (deftest test-plains-enters-summer
   (testing "Plains enters summer safely."
     (let [location (core/init-location :plains)]
+      (testing "Field is fallow"
+        (let [location*
+              (->> (core/update-nutrients core/nutrients 1 location)
+                   core/plains-enters-summer)]
+          (is (every? #(= 2 %) (map second (select-keys location* (seq core/nutrients)))))))
       (testing "Crop is ready for harvest."
         (let [location*
               (core/plains-enters-summer
