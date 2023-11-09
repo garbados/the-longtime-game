@@ -4,7 +4,8 @@
             [the-longtime-game.core :as core]
             [the-longtime-game.project :as project]
             [the-longtime-game.select :as select]
-            [the-longtime-game.text :as text]))
+            [the-longtime-game.text :as text]
+            [the-longtime-game.building :as building]))
 
 (defn introduction
   [herd]
@@ -98,8 +99,8 @@
            (let [[kind x] (s/conform ::select/infra infra)]
              (str "infra: "
                   (case kind
-                    :one (text/normalize-name x)
-                    :many (string/join ", " (map text/normalize-name x))))))
+                    :one (building/building->name x)
+                    :many (string/join ", " (map building/building->name x))))))
          (when-let [space (:space filter*)]
            (let [[kind x] (s/conform ::select/space space)]
              (str "space: "
