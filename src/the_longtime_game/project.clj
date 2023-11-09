@@ -134,7 +134,7 @@
      :uses [:craftwork]
      :filter {:stores (assoc {} resource base-need)}
      :effect
-     (gather-factory 10 [[:tools x]]
+     (gather-factory low-need [[:tools x]]
                      :infra :workshop)}))
 
 (def projects
@@ -167,7 +167,7 @@
      :filter {:terrain :forest}
      :filter-fn flora-filter
      :effect
-     (gather-factory 100 [[:food 1]]
+     (gather-factory (* 2 base-need) [[:food 1]]
                      :bonus-fn flora-bonus)
      :location-effect deplete-land}
     {:name "Elongate path"
@@ -189,7 +189,7 @@
      :description "Add another location to the next stage of the path."
      :detail "Each stage may have up to four locations, each of different terrain."
      :uses [:organizing]
-     :filter {:skills {:organizing 20}}
+     :filter {:skills {:organizing (* 2 earlygame-skill)}}
      :filter-fn
      (fn [herd]
        (> 4 (count (second (:path herd)))))
@@ -200,6 +200,8 @@
              location (-> ok-terrains vec rand-nth core/init-location)]
          (update-in herd [:path 1] conj location)))}
     {:name "Gather bog-iron"
+     :description "Acidic swampwater leeches pure iron from underground deposits."
+     :detail "Gather ore, once a year."
      :uses [:geology]
      :filter {:terrain :swamp}
      :filter-fn
@@ -210,15 +212,19 @@
      (fn [location]
        (assoc location :depleted? true))}
     {:name "Gather bog-iron with magnets"
+     :description "Collect more, deeper, with advanced tools and sensors."
+     :detail "Uses power to gather more."
      :uses [:geology]
      :filter {:terrain :swamp
               :power 1
-              :stores {:tools 10}}
+              :stores {:tools low-need}}
      :filter-fn
      #(false? (:depleted? (core/current-location %)))
      :effect
      (gather-factory base-need [[:ore 2]])}
     {:name "Gather deadfall"
+     :description "Scavenge wood and bone from what falls in the deep wood."
+     :detail "Provides more resources with more flora."
      :uses [:herbalism]
      :filter {:terrain :forest}
      :filter-fn flora-filter
@@ -228,6 +234,8 @@
                      :bonus-fn flora-bonus)
      :location-effect deplete-land}
     {:name "Gather stones"
+     :description "Collect rocks and surface ore from the local area."
+     :detail "More effective in mountains."
      :uses [:geology]
      :effect
      (gather-factory base-need [[:stone 1]
@@ -239,6 +247,8 @@
                          3/2
                          1)))}
     {:name "Graze"
+     :description "Feed from the land as you have since time immemorial."
+     :detail "Less effective in Winter."
      :uses [:herbalism]
      :effect
      (gather-factory base-need [[:food 1]]
@@ -248,32 +258,38 @@
                          1/2
                          1)))}
     {:name "Harvest crops"
+     :description "Gather plenty of food from ripe plants."
+     :detail "Crops must be replanted next Spring to grow again."
      :uses [:herbalism]
      :filter {:terrain :plains}
      :filter-fn
      #(true? (:ready? (core/current-location %)))
      :effect
      #(update-in %1 [:stores :food] +
-                 (int (* 100 (skill->multiplier %2))))
+                 (int (* base-need 2 (skill->multiplier %2))))
      :location-effect
      #(assoc %
              :crop nil
              :ready? false)}
     {:name "Harvest crops mechanically"
+     :description "Use advanced tools to thresh plants more effectively."
+     :detail "Uses power to produce more food."
      :uses [:herbalism]
      :filter {:terrain :plains
-              :stores {:tools 10}
+              :stores {:tools low-need}
               :power 1}
      :filter-fn
      #(true? (:ready? (core/current-location %)))
      :effect
      #(update-in %1 [:stores :food] +
-                 (int (* 200 (skill->multiplier %2))))
+                 (int (* base-need 4 (skill->multiplier %2))))
      :location-effect
      #(assoc %
              :crop nil
              :ready? false)}
     {:name "Hold festival"
+     :description "Surprise and tantalize with feats of physical prowess and dextrous excellence!"
+     :detail "Consumes nutrition and raises fulfillment."
      :uses [:athletics :organizing]
      :filter-fn
      #(core/herd-has-nutrition? % 1/5)
@@ -281,6 +297,8 @@
      #(-> ((fulfillment-factory 3 :infra :stadium) %1 %2)
           (core/consume-nutrition 1/5))}
     {:name "Launch probe"
+     :description "Place a sensor-bearing craft on a journey throughout the local system."
+     :detail "Raises fulfillment, besides!"
      :uses [:craftwork :organizing]
      :filter {:power 2
               :stores {:metal 500 :tools 1000}
@@ -293,27 +311,30 @@
      :text-fn
      (constantly space-text/probe)}
     {:name "Launch permanent space station"
+     :description "Place a habitable asset with a rotating crew at a local gravity-null point."
+     :detail "A humble bracelet, adorning the void."
      :uses [:craftwork :organizing]
      :filter {:power 2
-              :stores {:metal 1500 :tools 2000}}
+              :stores {:metal 1500 :tools 2000}
+              :infra :mag-launchpad
+              :space #{:probe}}
      :filter-fn
-     #(and (core/local-infra? % :mag-launchpad)
-           (contains? (:space %) :probe)
-           (nil? (get-in % [:space :station])))
+     #(nil? (get-in % [:space :station]))
      :effect
      #(-> (update % :space conj :station)
           (core/update-individuals core/inc-fulfillment 25))
      :text-fn
      (constantly space-text/station)}
     {:name "Launch shipyard requisites"
+     :description "Raise mining and production systems to facilitate large-scale manufacturing in space."
+     :detail "How else to truly invest in the stars, than to scatter ourselves among them?"
      :uses [:craftwork :organizing]
      :filter {:power 8
-              :stores {:metal 5000 :tools 10000}}
+              :stores {:metal 5000 :tools 10000}
+              :infra :mag-launchpad
+              :space #{:probe :station}}
      :filter-fn
-     #(and (core/local-infra? % :mag-launchpad)
-           (contains? (:space %) :probe)
-           (contains? (:space %) :station)
-           (nil? (get-in % [:space :shipyard])))
+     #(nil? (get-in % [:space :shipyard]))
      :effect
      (fn [herd]
        (-> herd
@@ -322,15 +343,15 @@
      :text-fn
      (constantly space-text/shipyard)}
     {:name "Launch ringworld requisites"
+     :description "Place a massive ring of stone and metal in a stable orbit, to be made habitable over centuries."
+     :detail "To live in space, forever, will require new scales of thought. New orders of dreaming."
      :uses [:craftwork :organizing]
      :filter {:power 16
-              :stores {:metal 50000 :tools 100000}}
+              :stores {:metal 50000 :tools 100000}
+              :infra :mag-launchpad
+              :space #{:probe :station :shipyard}}
      :filter-fn
-     #(and (core/local-infra? % :mag-launchpad)
-           (contains? (:space %) :probe)
-           (contains? (:space %) :station)
-           (contains? (:space %) :shipyard)
-           (nil? (get-in % [:space :ringworld])))
+     #(nil? (get-in % [:space :ringworld]))
      :effect
      (fn [herd]
        (-> herd
@@ -339,16 +360,15 @@
      :text-fn
      (constantly space-text/ringworld)}
     {:name "Launch mobile ringworld requisites"
+     :description "Advanced electromagnetic flux capacitors allow ion engines to tug a ringworld through space."
+     :detail "What will it really take, to hold a Longtime amid the everlasting void?"
      :uses [:craftwork :organizing]
      :filter {:power 32
-              :stores {:metal 500000 :tools 1000000}}
+              :stores {:metal 500000 :tools 1000000}
+              :infra :mag-launchpad
+              :space #{:probe :station :shipyard :ringworld}}
      :filter-fn
-     #(and (core/local-infra? % :mag-launchpad)
-           (contains? (:space %) :probe)
-           (contains? (:space %) :station)
-           (contains? (:space %) :shipyard)
-           (contains? (:space %) :ringworld)
-           (nil? (get-in % [:space :mobile-ringworld])))
+     #(nil? (get-in % [:space :mobile-ringworld]))
      :effect
      (fn [herd]
        (-> herd
@@ -357,6 +377,8 @@
      :text-fn
      (constantly space-text/mobile-ringworld)}
     {:name "Mag-smelt metal"
+     :description "Use powerful electromagnetics to separate and purify ore."
+     :detail "Consumes power to produce metal."
      :uses [:craftwork]
      :filter {:power 1
               :stores {:ore base-need}}
@@ -365,32 +387,41 @@
      :effect
      (gather-factory base-need [[:metal 1]])}
     {:name "Prepare poultices"
+     :description "Sift edible plants for their medicinal properties, and prepare herbal treatments from them."
+     :detail "Turns food to medicine."
      :uses [:medicine]
      :filter {:stores {:food base-need}}
      :effect
      (gather-factory base-need [[:poultices 1/2]]
                      :infra :hospital)}
     {:name "Smelt metal"
+     :description "Use the massive force of monsoon winds to heat charcoal hot enough to make high-quality steel."
+     :detail "Only works during monsoon season (Fall)."
      :uses [:craftwork]
      :filter {:season 2
-              :stores {:wood base-need :ore base-need}}
-     :filter-fn
-     #(core/local-infra? % :wind-forge)
+              :stores {:wood base-need :ore base-need}
+              :infra :wind-forge}
      :effect
      (gather-factory base-need [[:metal 1/2]]
                      :infra :monsoon-bellows)}
     {:name "Spelunk"
+     :description "Delve the dimdark for shinies."
+     :detail "Gathers ore using geology and athletics."
      :uses [:athletics :geology]
      :filter {:terrain :mountain
-              :stores {:tools 5}}
+              :stores {:tools low-need}}
      :effect
      (gather-factory base-need [[:ore 1]])}
     {:name "Stargaze"
+     :description "Observe the celestial sphere, and revel in its awesome span."
+     :detail "Tedious types record this stuff."
      :uses [:organizing]
      :filter {:terrain :mountain}
      :effect
      (fulfillment-factory 2 :infra :observatory)}
     {:name "Synthesize medicine"
+     :description "Use advanced tools to produce high-quality medical treatments."
+     :detail "Consumes power to produce more poultices."
      :uses [:medicine]
      :filter {:infra :hospital
               :skills {:medicine 100}
@@ -401,36 +432,48 @@
      (gather-factory base-need [[:poultices 1]]
                      :infra :hospital)}
     {:name "Trade wood for stone"
+     :description "Harps will accept a well-shaped stick for a fascinating stone."
+     :detail "More or less."
      :uses []
      :filter {:stores {:wood base-need}
               :infra :flyer-market}
      :effect
      (trade-factory :stone base-need 2 3)}
     {:name "Trade stone for bone"
+     :description "The lingering fact of a soul, for the inert substance of the world? Perhaps, perhaps."
+     :detail "Trades at a variable rate."
      :uses []
      :filter {:stores {:stone base-need}
               :infra :flyer-market}
      :effect
      (trade-factory :bone base-need 3 5)}
     {:name "Trade bone for ore"
+     :description "Deep in the earth lingers the evidence of some vast mystery, just as upon it thrives another."
+     :detail "Worse rates for more tenuous arguments."
      :uses []
      :filter {:stores {:bone base-need}
               :infra :flyer-market}
      :effect
      (trade-factory :ore base-need 4 7)}
     {:name "Trade ore for tools"
+     :description "It is the proof of effort, invested and potential, which captures the truest shinies."
+     :detail "Rhetorician's discount!"
      :uses []
      :filter {:stores {:ore base-need}
               :infra :flyer-market}
      :effect
      (trade-factory :tools base-need 5 9)}
     {:name "Trade tools for metal"
+     :description "The riddle of steel materializes the promise of the tool, and the craftsfolk."
+     :detail "Many tools to few metal."
      :uses []
      :filter {:stores {:tools base-need}
               :infra :flyer-market}
      :effect
      (trade-factory :metal base-need 6 11)}
     {:name "Turn generator"
+     :description "The strong among us flex and vie for a chance to turn power into power!"
+     :detail "Produces energy with time."
      :uses [:athletics]
      :filter {:infra :quern-generator}
      :filter-fn
@@ -442,6 +485,8 @@
        (let [amount (int (skill->multiplier skill-amount))]
          (core/update-current-location herd #(update % :power + amount))))}
     {:name "Venerate the land"
+     :description "Using the stuff of life, we sanctify this earth, and bid it grow strong with us."
+     :detail "Raises flora using rations. Requires more herbalism, the higher the flora."
      :uses [:herbalism]
      :filter {:terrain :forest
               :stores {:rations base-need}
@@ -449,9 +494,10 @@
      :filter-fn
      (fn [herd]
        (let [location (core/current-location herd)]
-         (core/herd-has-skill? herd
-                               :herbalism
-                               (* 100 (:flora location)))))
+         (and (> 4 (:flora location))
+              (core/herd-has-skill? herd
+                                    :herbalism
+                                    (* 100 (:flora location))))))
      :location-effect
      (fn [location]
        (update location :flora inc))}]))
