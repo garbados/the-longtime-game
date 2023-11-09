@@ -152,7 +152,6 @@
     {:name :railways
      :description "A complex system of transport-tracks connecting a portion of the continent."
      :detail "Increases the herd's carry limit considerably."
-     :uses :craftwork
      :filter
      {:stores {:metal 1000 :tools 1000}
       :skills {:craftwork 500}}}
