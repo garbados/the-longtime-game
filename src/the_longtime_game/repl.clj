@@ -405,7 +405,7 @@
          core/carryable)]
     (if (> 0 remaining)
       (do
-        (println (quote-text (str "Carrying too much! Carry " remaining " less.")))
+        (println (quote-text (str "Carrying too much! Carry " (Math/abs remaining) " less.")))
         (decide-carrying herd))
       (do
         (println
