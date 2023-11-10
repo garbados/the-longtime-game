@@ -1,29 +1,20 @@
 # How to Play *The Longtime*
 
-Hail, O Longtime! A herd of Minots has prayed you into being; invested you with their hopes, and their skills. It falls to you to shepherd them through the ages, to decide, in subtle and decisive ways, where they go and what they do.
+The game takes place over months and years. The herd begins in a plains, turned over underhoof and favored by the highest winds, ready for an era of agriculture to begin. It will spend the month there, devoting itself to various efforts. What they do *is* the Longtime, just as much as it is a spirit of eternity; just as much as it is the potential of doing, it is the specific result of each day, and the accumulation of such days, for eons and eons.
 
-Minots have traversed the Gran-Imun-Yuliak supercontinent for eons, in herds large and small, across ranges wide and narrow. Their vast strength, rapid gallop, and four stomachs have made them an herbivore atop a food chain. Now an era of tools and crops begins to dawn, while greater ambitions brew in the dreams of humble ungulate-primates.
+As the Longtime, you decide what the herd does each month and where it goes next. You choose three projects, one at a time. Some projects have requirements that must be satisfied before they can be chosen, so you can check with `projects` to list all of them. You can also search projects with `search [query]` which will look for the query term in project names, descriptions, and tooltips. As you have for generations, it would behoove you to start with some *grazing*.
 
-Each month, you will select three projects for the herd to enact. These include grazing, gathering stones, or constructing buildings. Type `projects` for more info on all the projects in the game. You can also use `search [query]` to look for specific projects. At the end of each month, the upkeeps of hunger and sickness apply, consuming nutrition and poultices respectively. Without enough food or rations, the herd goes hungry, degrading its abilities. If the herd remains hungry for an entire year, it will disband, destroying you. Without enough poultices, sickness spreads, reducing effective skills. After upkeep is applied, you will select the next location for the herd to travel to. The herd's migration path consists of a loop of stages; each stage has up to four locations, and you may travel to any location in the next stage.
+Once you have chosen the month's projects, some things happen by the herd's will and needs alone. Regarding needs, the herd consumes nutrition and poultices at the end of each month, to prevent hunger and sickness respectively. Nutrition can come either as food or rations; rations keep and can be moved, but you can always get food by grazing. (You can get *lots* of food from crops!) Meanwhile, poultices are derived from food, by sifting the medicinal elements of the many things Minots are known to eat. Hunger and sickness both reduce the herd's collective skills, and if they get too high, the herd will disband -- ending the Longtime.
 
-At the beginning of each month, an event may occur. Events are happenings that the herd handles on its own. These may include weather events, interpersonal conflicts, plague and fire, and so on. At the end of each month, a dream may occur. Dreams represent the prayers of your people, and you may be prompted to answer them. Your counsel will influence the dreamer as they forge their life.
+The month closes with the possibility of a dream -- a prayer, from an individual of the herd. They will ask for guidance, or reflect on events, and may prompt you for a decision. Of course, they are only consulting themselves.
 
-Individuals in the herd have traits, passions, skills, and fulfillment. Check out `individuals` for details about your herd. You can also use `search [query]` to look for individuals by their name, traits, et al. When individual fulfillment gets too low, unhappy folk will become weary and depressed. On the other hand, happy individuals will tend to spread the love around.
+Finally, you choose the next location. The herd's migration path is organized into stages, of up to four locations of different terrains each. When you move to the next stage, you select from among its locations. If you move to a steppe location, the herd can cross it easily without advancing the calendar.
 
-There are six types of terrain in the game:
+As you enter a location, an event may occur. This is something the herd has to face alone: a plague, a fire, the end of a journey or the faces of misfortune. Good things happen too, of course. All things happen, in the great span.
 
-- Plains: grow crops in spring, harvest in summer or fall.
-- Forest: flora grows over time; gather deadfall for wood.
-- Mountain: good for stone-gathering, spelunking, and stargazing.
-- Steppe: rush overland easily; cross this stage without passing time.
-- Jungle: a tropical rainforest; a thick and vicious green.
-- Swamp: gather bog-iron once a year.
+Then you select projects once more, and the cycle begins again.
 
-Each stage of the herd's migration path may have up to four locations. Each location may have up to four constructed buildings.
-
-Eventually, your herd will possess the skills to explore new locations, and to elongate the migration path to accommodate a larger herd. For now, you walk a small loop from plains to mountain and back again. Use `path` to look at your whole migration path.
-
-Now you are ready to look after your herd. Will you see them to new homes among the stars? Or will famine and want tear you apart?
+That's the Longtime.
 
 For more information, see these info pages:
 
