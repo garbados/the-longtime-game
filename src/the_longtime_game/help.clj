@@ -139,7 +139,7 @@
      "\n"
      (flatten
       [(str "┌ " preface)
-       (for [project project/projects
+       (for [project (sort-by :name project/projects)
              :let [lines (text/wrap-text (marshal-project-to-str project) width)]
              :when (when project)]
          (for [i (range (count lines))
