@@ -937,10 +937,13 @@
   :ret (s/keys :req-un [::path]))
 
 (defn has-lost? [herd]
-  (= max-hunger (:hunger herd)))
+  (or (= max-hunger (:hunger herd))
+      (< 1 (/ (:sickness herd) (count (:individuals herd))))))
 
 (s/fdef has-lost?
-  :args (s/cat :herd (s/keys :req-un [::hunger]))
+  :args (s/cat :herd (s/keys :req-un [::hunger
+                                      ::sickness
+                                      ::individuals]))
   :ret boolean?)
 
 (defn next-location
