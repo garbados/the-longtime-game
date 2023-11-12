@@ -21,7 +21,7 @@
 
 (s/def ::stores
   (s/map-of ::core/resource
-            (s/or :n nat-int?
+            (s/or :n pos-int?
                   :x (s/and number? #(< 0 % 1)))))
 
 (s/def ::filter (s/keys :opt-un [::skills
@@ -52,10 +52,10 @@
          true)
        (reduce
         (fn [ok? [resource required]]
-          (let [amount
-                (if (> 1 required 0)
-                  (int (* required (count (:individuals herd))))
-                  (get-in herd [:stores resource] 0))]
+          (let [required (cond-> required
+                           (> 1 required 0)
+                           (* (count (:individuals herd))))
+                amount (get-in herd [:stores resource] 0)]
             (and ok?
                  (>= amount required))))
         true

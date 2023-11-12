@@ -75,21 +75,20 @@
     `core/update-individuals
     `core/update-nutrients]))
 
-(defspec test-stable-population-growth 20
-  (props/for-all
-   [herd (s/gen ::core/herd)]
-   (let [optimal (core/calc-optimal-population herd)
-         herd*
-         (reduce
-          (fn [herd _]
-            (let [[journeyings deaths] (core/shift-population herd)
-                  [new-adults new-dead] (core/calc-pop-changes herd journeyings deaths)]
-              (core/apply-pop-changes herd new-adults new-dead)))
-          herd
-          (range 100))]
-     (is (> (* 3/2 optimal)
-            (count (:individuals herd*))
-            (* 1/2 optimal))))))
+(deftest test-stable-population-growth
+  (let [herd (core/gen-herd)
+        optimal (core/calc-optimal-population herd)
+        herd*
+        (reduce
+         (fn [herd _]
+           (let [[journeyings deaths] (core/shift-population herd)
+                 [new-adults new-dead] (core/calc-pop-changes herd journeyings deaths)]
+             (core/apply-pop-changes herd new-adults new-dead)))
+         herd
+         (range 100))]
+    (is (> (* 3/2 optimal)
+           (count (:individuals herd*))
+           (* 1/2 optimal)))))
 
 (deftest test-inc-max-skill
   (testing "Skills should not change when inc'd if all skills are maxed."

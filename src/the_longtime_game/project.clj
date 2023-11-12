@@ -16,7 +16,7 @@
 
 (defn skill->multiplier
   [skill-amount]
-  (+ 1 (Math/log10 (/ skill-amount 10))))
+  (Math/log10 (inc skill-amount)))
 
 (def flora-bonus
   #(:flora (core/current-location %)))

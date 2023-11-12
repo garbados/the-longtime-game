@@ -618,9 +618,8 @@
                      ::index
                      ::month
                      ::path])
-    (let [gen-herd* (memoize gen-herd)]
-      #(g/fmap (fn [_] (gen-herd*))
-               (g/return 0)))))
+    #(g/fmap (fn [[individuals]] (gen-herd :individuals individuals))
+             (g/tuple (s/gen ::individuals)))))
 
 (s/fdef gen-herd
   :args (s/keys* :opt-un [::name
@@ -712,7 +711,7 @@
   (let [population (-> herd :individuals count)
         optimal (calc-optimal-population herd)
         delta (- optimal population)
-        n (inc (int (Math/abs (Math/log delta))))]
+        n (int (Math/abs (Math/log delta)))]
     (if (> delta 0)
       [(rand-int n) (rand-int 2)]
       [(rand-int 2) (rand-int n)])))
