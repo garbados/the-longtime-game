@@ -10,15 +10,13 @@
 (def base-need 50)
 (def low-need 10)
 
-(def skill-multiplier 100)
-
 (def earlygame-skill 10)
 (def midgame-skill 100)
 (def endgame-skill 1000)
 
 (defn skill->multiplier
   [skill-amount]
-  (+ 1 (/ skill-amount skill-multiplier)))
+  (+ 1 (Math/log10 (/ skill-amount 10))))
 
 (def flora-bonus
   #(:flora (core/current-location %)))
@@ -471,6 +469,16 @@
               :infra :flyer-market}
      :effect
      (trade-factory :metal base-need 6 11)}
+    {:name "Train and hobby"
+     :description "Devote the herd to the development of its own abilities."
+     :detail "Raises skills, prioritizing passions."
+     :uses [:organizing]
+     :filter {:stores {:tools 1/10
+                       :wood 1/10
+                       :rations 1/10}}
+     :effect
+     (fn [herd _]
+       (core/update-individuals herd (partial core/inc-passion-skill herd)))}
     {:name "Turn generator"
      :description "The strong among us flex and vie for a chance to turn power into power!"
      :detail "Produces energy with time."
@@ -597,7 +605,10 @@
         update-stores
         #(reduce
           (fn [herd [resource amount]]
-            (update-in herd [:stores resource] - amount))
+            (let [amount (cond-> amount
+                           (< 0 amount 1) (* (count (:individuals herd)))
+                           :finally int)]
+              (update-in herd [:stores resource] - amount)))
           %
           stores-filter)
         power-filter (get-in project [:filter :power])

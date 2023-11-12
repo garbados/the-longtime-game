@@ -48,6 +48,7 @@
     `core/inc-atomic-reactors
     `core/inc-fulfillment
     `core/end-month
+    `core/inc-passion-skill
     `core/inc-season
     `core/inc-some-skill
     `core/individual-skill
@@ -97,7 +98,7 @@
                     (assoc all skill core/max-skill))
                   {}
                   core/skills)
-          skills* (core/inc-some-skill skills)]
+          {skills* :skills} (core/inc-some-skill {:skills skills})]
       (is (= skills skills*)))))
 
 (deftest test-all-contacts

@@ -221,18 +221,24 @@
 (s/def ::traits (s/coll-of ::trait :kind set?))
 (s/def ::fulfillment (s/int-in 0 (inc max-fulfillment)))
 
-(defn inc-some-skill [skills*]
-  (let [skill (rand-nth (vec skills))
-        rank (get skills* skill 0)]
-    (if (= rank max-skill)
-      (if (= max-skill (reduce min (vals skills*)))
-        skills*
-        (inc-some-skill skills*))
-      (assoc skills* skill (inc rank)))))
+(defn can-inc-skill? [{:keys [skills]} skill]
+  (> max-skill (get skills skill 0)))
+
+(s/fdef can-inc-skill?
+  :args (s/cat :individual (s/keys :req-un [::skills])
+               :skill ::skill)
+  :ret boolean?)
+
+(defn inc-some-skill [individual & {:keys [skills]
+                                    :or {skills skills}}]
+  (if-let [skills* (seq (filter (partial can-inc-skill? individual) skills))]
+    (let [skill (rand-nth skills*)]
+      (update-in individual [:skills skill] #(if % (inc %) 1)))
+    individual))
 
 (s/fdef inc-some-skill
-  :args (s/cat :skills ::skills)
-  :ret ::skills)
+  :args (s/cat :individual (s/keys :req-un [::skills]))
+  :ret (s/keys :req-un [::skills]))
 
 (defn get-age [{:keys [month]} {:keys [born]}]
   (int (/ (- month born) 12)))
@@ -243,7 +249,8 @@
   :ret ::age)
 
 (defn becomes-passionate?
-  [used {:keys [passions]}]
+  [used {:keys [passions]} & {:keys [passion-rate]
+                              :or {passion-rate passion-rate}}]
   (when (> max-passions (count passions))
     (when-let [candidates (seq (filter #(false? (contains? passions %)) used))]
       (when (zero? (rand-int passion-rate))
@@ -267,10 +274,8 @@
         skill (when gain-passion?
                 (becomes-passionate? skills individual))]
     (cond-> individual
-      quintile-bday?
-      (update :skills inc-some-skill)
-      skill
-      (update :passions conj skill))))
+      quintile-bday? inc-some-skill
+      skill (update :passions conj skill))))
 
 (defn gen-baby
   [born]
@@ -278,12 +283,8 @@
    :born born
    :fulfillment (+ 40 (rand-int 21))
    :traits (set (take 1 (shuffle (vec positive-traits))))
-   :passions #{}
-   :skills (reduce
-            (fn [skills* skill]
-              (assoc skills* skill 0))
-            {}
-            skills)})
+   :passions (set (take 1 (shuffle (vec skills))))
+   :skills (reduce #(assoc %1 %2 0) {} skills)})
 
 (defn gen-individual
   [{:keys [month]} age-in-months]
@@ -779,6 +780,23 @@
   :args (s/cat :herd ::herd
                :infra buildings)
   :ret boolean?)
+
+(defn inc-passion-skill [herd individual]
+  (let [passions
+        (or (seq (filter (partial can-inc-skill? individual) (:passions individual)))
+            (seq (filter (partial can-inc-skill? individual) skills)))
+        skill (when passions (rand-nth passions))
+        learns? (and skill
+                     (or (local-infra? herd :pluriversity)
+                         (zero? (rand-int 2))))]
+    (if learns?
+      (update-in individual [:skills skill] inc)
+      individual)))
+
+(s/fdef inc-passion-skill
+  :args (s/cat :herd ::herd
+               :individual ::individual)
+  :ret ::individual)
 
 (s/def ::season (s/int-in 0 4))
 

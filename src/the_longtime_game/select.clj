@@ -19,8 +19,13 @@
 
 (s/def ::power pos-int?)
 
+(s/def ::stores
+  (s/map-of ::core/resource
+            (s/or :n nat-int?
+                  :x (s/and number? #(< 0 % 1)))))
+
 (s/def ::filter (s/keys :opt-un [::skills
-                                 ::core/stores
+                                 ::stores
                                  ::core/season
                                  ::core/terrain
                                  ::contacts
