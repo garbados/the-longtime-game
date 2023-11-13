@@ -1,0 +1,38 @@
+{
+  "name": "the-longtime-game",
+  "version": "0.2.0",
+  "description": "A game about cooperation and minotaurs.",
+  "main": "out/index.js",
+  "directories": {
+    "doc": "doc",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "lein test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/garbados/the-longtime-game.git"
+  },
+  "keywords": [
+    "game",
+    "clojure",
+    "clojurescript",
+    "react"
+  ],
+  "author": "Diana Fernanda Belle <garbados@gmail.com>",
+  "license": "SEE LICENSE IN LICENSE",
+  "bugs": {
+    "url": "https://github.com/garbados/the-longtime-game/issues"
+  },
+  "homepage": "https://github.com/garbados/the-longtime-game#readme",
+  "devDependencies": {
+    "serve": "^14.2.1",
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.4"
+  },
+  "dependencies": {
+    "pouchdb": "^8.0.1",
+    "react-dom": "^18.2.0"
+  }
+}

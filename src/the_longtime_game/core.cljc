@@ -154,8 +154,8 @@
 (def carry-modifier 3)
 (def org-threshold 10)
 (def org-multiplier 2)
-(def hunger-rate 1/3)
-(def sickness-rate 1/4)
+(def hunger-rate (/ 1 3))
+(def sickness-rate (/ 1 4))
 (def contact-rate 2)
 (def max-flora 4)
 (def giftright-rate 20)
@@ -835,8 +835,8 @@
          individuals)
         syndicate-bonus
         (-> (count (filter skill syndicates))
-            (* 1/2)
-            (+ 1/2))
+            (* 0.5)
+            (+ 0.5))
         hunger-penalty
         (- 1 (/ hunger max-hunger))
         sickness-penalty

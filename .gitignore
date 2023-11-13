@@ -15,3 +15,6 @@ pom.xml.asc
 .clj-kondo
 save_*
 longtime_save_*
+.cpcache
+out
+node_modules
