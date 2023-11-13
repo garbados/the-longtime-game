@@ -711,7 +711,7 @@
   (let [population (-> herd :individuals count)
         optimal (calc-optimal-population herd)
         delta (- optimal population)
-        n (int (Math/log (max 1 (Math/abs delta))))]
+        n (+ 2 (int (Math/log (max 1 (Math/abs delta)))))]
     (if (> delta 0)
       [(rand-int n) (rand-int 2)]
       [(rand-int 2) (rand-int n)])))
