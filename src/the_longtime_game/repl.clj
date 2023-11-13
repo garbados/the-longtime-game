@@ -143,17 +143,10 @@
           ok? (>= (get-in herd [:stores :poultices] 0) need)
           ! (if ok? "" "!")]
       (println "├─ Sickness:"
-               (as-> (:sickness herd) $
-                 (/ $ population)
-                 (* $ 100)
-                 (float $)
-                 (format "%.2f" $)
-                 (str $ "%"))
+               (str (int (* (/ (:sickness herd) population) 100)) "%")
                (str "(-" need ! ")")))
     (let [fulfillments (map :fulfillment (:individuals herd))
-          average (as-> fulfillments $
-                    (reduce + 0 $)
-                    (/ $ population))
+          average (/ (reduce + 0 fulfillments) population)
           minimum (reduce min fulfillments)
           maximum (reduce max fulfillments)]
       (println "├─ Fulfillment:"

@@ -20,7 +20,7 @@
 (s/def ::power pos-int?)
 
 (s/def ::stores
-  (s/map-of ::core/resource
+  (s/map-of (conj core/resources :nutrition)
             (s/or :n pos-int?
                   :x (s/and number? #(< 0 % 1)))))
 
@@ -50,15 +50,14 @@
        (if season
          (= (core/get-season herd) season)
          true)
-       (reduce
-        (fn [ok? [resource required]]
-          (let [required (cond-> required
-                           (> 1 required 0)
-                           (* (count (:individuals herd))))
-                amount (get-in herd [:stores resource] 0)]
-            (and ok?
-                 (>= amount required))))
-        true
+       (every?
+        (fn [[resource required]]
+          (if (= :nutrition resource)
+            (core/herd-has-nutrition? herd required)
+            (>= (get-in herd [:stores resource] 0)
+                (if (> 1 required 0)
+                  (int (* required (count (:individuals herd))))
+                  required))))
         (or stores {}))
        (if (and contacts (s/valid? ::contacts contacts))
          (let [[kind x] (s/conform ::contacts contacts)]

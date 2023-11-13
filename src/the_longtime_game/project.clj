@@ -287,8 +287,9 @@
              :ready? false)}
     {:name "Hold festival"
      :description "Surprise and tantalize with feats of physical prowess and dextrous excellence!"
-     :detail "Consumes nutrition and raises fulfillment."
+     :detail "Consumes 1 nutrition per 5 individuals, and raises fulfillment."
      :uses [:athletics :organizing]
+     :filter {:stores {:nutrition 1/5}}
      :filter-fn
      #(core/herd-has-nutrition? % 1/5)
      :effect
@@ -604,9 +605,15 @@
         stores-filter (get-in project [:filter :stores])
         update-stores
         #(reduce
-          (fn [herd [resource amount]]
-            (let [amount (cond-> amount
-                           (< 0 amount 1) (* (count (:individuals herd)))
+          (fn [herd [resource required]]
+            (if (= :nutrition resource)
+              (core/consume-nutrition herd required)
+              (>= (get-in herd [:stores resource] 0)
+                  (if (> 1 required 0)
+                    (int (* required (count (:individuals herd))))
+                    required)))
+            (let [amount (cond-> required
+                           (< 0 required 1) (* (count (:individuals herd)))
                            :finally int)]
               (update-in herd [:stores resource] - amount)))
           %

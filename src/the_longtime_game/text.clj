@@ -7,9 +7,11 @@
 (defn normalize-name
   [x]
   (cond
-    (keyword? x) (name x)
-    (string? x)  x
-    :else        (str x)))
+    (keyword? x)     (name x)
+    (and (number? x)
+         (< 0 x 1))  (str (int (* 100 (float x))) "%")
+    (string? x)      x
+    :else            (str x)))
 
 (s/fdef normalize-name
   :args (s/cat :x any?)
