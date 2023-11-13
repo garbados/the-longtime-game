@@ -608,14 +608,10 @@
           (fn [herd [resource required]]
             (if (= :nutrition resource)
               (core/consume-nutrition herd required)
-              (>= (get-in herd [:stores resource] 0)
-                  (if (> 1 required 0)
-                    (int (* required (count (:individuals herd))))
-                    required)))
-            (let [amount (cond-> required
-                           (< 0 required 1) (* (count (:individuals herd)))
-                           :finally int)]
-              (update-in herd [:stores resource] - amount)))
+              (let [amount (if (> 1 required 0)
+                             (int (* required (count (:individuals herd))))
+                             required)]
+                (update-in herd [:stores resource] - amount))))
           %
           stores-filter)
         power-filter (get-in project [:filter :power])

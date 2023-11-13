@@ -54,6 +54,7 @@
      :filter
      {:skills {:herbalism 200 :craftwork 200}
       :stores {:wood 300 :rations 150 :poultices 100}
+      :terrain :forest
       :contacts :er-sol}}
     {:name :flyer-market
      :description "A market for birds and friends of birds."
