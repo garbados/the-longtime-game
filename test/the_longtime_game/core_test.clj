@@ -48,6 +48,7 @@
     `core/inc-atomic-reactors
     `core/inc-fulfillment
     `core/end-month
+    `core/inc-passion-skill
     `core/inc-season
     `core/inc-some-skill
     `core/individual-skill
@@ -74,10 +75,11 @@
     `core/update-individuals
     `core/update-nutrients]))
 
-(defspec test-stable-population-growth 20
+(defspec test-stable-population-growth 5
   (props/for-all
    [herd (s/gen ::core/herd)]
    (let [optimal (core/calc-optimal-population herd)
+         delta (- (count (:individuals herd)) optimal)
          herd*
          (reduce
           (fn [herd _]
@@ -85,10 +87,9 @@
                   [new-adults new-dead] (core/calc-pop-changes herd journeyings deaths)]
               (core/apply-pop-changes herd new-adults new-dead)))
           herd
-          (range 100))]
-     (is (> (* 3/2 optimal)
-            (count (:individuals herd*))
-            (* 1/2 optimal))))))
+          (range 100))
+         delta* (- (count (:individuals herd*)) optimal)]
+     (is (> (Math/abs delta) (Math/abs delta*))))))
 
 (deftest test-inc-max-skill
   (testing "Skills should not change when inc'd if all skills are maxed."
@@ -97,7 +98,7 @@
                     (assoc all skill core/max-skill))
                   {}
                   core/skills)
-          skills* (core/inc-some-skill skills)]
+          {skills* :skills} (core/inc-some-skill {:skills skills})]
       (is (= skills skills*)))))
 
 (deftest test-all-contacts

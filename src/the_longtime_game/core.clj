@@ -221,11 +221,11 @@
 (s/def ::traits (s/coll-of ::trait :kind set?))
 (s/def ::fulfillment (s/int-in 0 (inc max-fulfillment)))
 
-(defn can-inc-skill? [individual skill]
-  (> max-skill (get-in individual [:skills skill])))
+(defn can-inc-skill? [{:keys [skills]} skill]
+  (> max-skill (get skills skill 0)))
 
 (s/fdef can-inc-skill?
-  :args (s/cat :individual ::individual
+  :args (s/cat :individual (s/keys :req-un [::skills])
                :skill ::skill)
   :ret boolean?)
 
@@ -233,12 +233,12 @@
                                     :or {skills skills}}]
   (if-let [skills* (seq (filter (partial can-inc-skill? individual) skills))]
     (let [skill (rand-nth skills*)]
-      (update-in individual [:skills skill] inc))
+      (update-in individual [:skills skill] #(if % (inc %) 1)))
     individual))
 
 (s/fdef inc-some-skill
-  :args (s/cat :skills ::skills)
-  :ret ::individual)
+  :args (s/cat :individual (s/keys :req-un [::skills]))
+  :ret (s/keys :req-un [::skills]))
 
 (defn get-age [{:keys [month]} {:keys [born]}]
   (int (/ (- month born) 12)))
@@ -618,9 +618,8 @@
                      ::index
                      ::month
                      ::path])
-    (let [gen-herd* (memoize gen-herd)]
-      #(g/fmap (fn [_] (gen-herd*))
-               (g/return 0)))))
+    #(g/fmap (fn [[individuals]] (gen-herd :individuals individuals))
+             (g/tuple (s/gen ::individuals)))))
 
 (s/fdef gen-herd
   :args (s/keys* :opt-un [::name
@@ -712,7 +711,7 @@
   (let [population (-> herd :individuals count)
         optimal (calc-optimal-population herd)
         delta (- optimal population)
-        n (inc (int (Math/abs (Math/log delta))))]
+        n (+ 2 (int (Math/log (max 1 (Math/abs delta)))))]
     (if (> delta 0)
       [(rand-int n) (rand-int 2)]
       [(rand-int 2) (rand-int n)])))
@@ -955,10 +954,13 @@
   :ret (s/keys :req-un [::path]))
 
 (defn has-lost? [herd]
-  (= max-hunger (:hunger herd)))
+  (or (= max-hunger (:hunger herd))
+      (< 1 (/ (:sickness herd) (count (:individuals herd))))))
 
 (s/fdef has-lost?
-  :args (s/cat :herd (s/keys :req-un [::hunger]))
+  :args (s/cat :herd (s/keys :req-un [::hunger
+                                      ::sickness
+                                      ::individuals]))
   :ret boolean?)
 
 (defn next-location

@@ -58,6 +58,18 @@
           individual
           #(update % :traits disj :weary))))})
 
+(def funeral
+  {:name "Funeral"
+   :text-fn event-text/funeral
+   :selects [{}]
+   :filter-fn
+   #(< 1 (count (:new-dead %)))
+   :marshal-fn
+   (fn [herd & _]
+     (first (:new-dead herd)))
+   :effect
+   (fn [herd & _] herd)})
+
 (def gruxnis-attack!
   {:name "Grux'nis attack"
    :text-fn event-text/gruxnis-attack!
@@ -138,12 +150,13 @@
    gruxnis-attack!
    ration-rot
    plague
-   wound-healed])
+   wound-healed
+   crossed-paths])
 
 (def general-events
   [journeying-ends
    offshoot-joins
-   crossed-paths])
+   funeral])
 
 (s/def ::event
   (s/with-gen

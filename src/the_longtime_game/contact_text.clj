@@ -138,7 +138,7 @@
     but who, to whom, and how much, of what, is necessarily contentious.
     No one goes hungry, not in centuries, but a clan without face
     has been known to know lean years.
-    Borrowers, as they are known, are obliged to provide a gift for what is taken,
+    By giftright, borrowers are expected to provide a gift for what is taken,
     which provides an opportunity to attain face,
     and in these meetings such things are also arranged.
     But now, with such close proximity to the herd's syndicates,

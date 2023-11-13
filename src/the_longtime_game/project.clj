@@ -16,7 +16,7 @@
 
 (defn skill->multiplier
   [skill-amount]
-  (+ 1 (Math/log10 (/ skill-amount 10))))
+  (Math/log10 (inc skill-amount)))
 
 (def flora-bonus
   #(:flora (core/current-location %)))
@@ -287,8 +287,9 @@
              :ready? false)}
     {:name "Hold festival"
      :description "Surprise and tantalize with feats of physical prowess and dextrous excellence!"
-     :detail "Consumes nutrition and raises fulfillment."
+     :detail "Consumes 1 nutrition per 5 individuals, and raises fulfillment."
      :uses [:athletics :organizing]
+     :filter {:stores {:nutrition 1/5}}
      :filter-fn
      #(core/herd-has-nutrition? % 1/5)
      :effect
@@ -473,9 +474,9 @@
      :description "Devote the herd to the development of its own abilities."
      :detail "Raises skills, prioritizing passions."
      :uses [:organizing]
-     :filter {:stores {:tools low-need
-                       :wood low-need
-                       :rations low-need}}
+     :filter {:stores {:tools 1/10
+                       :wood 1/10
+                       :rations 1/10}}
      :effect
      (fn [herd _]
        (core/update-individuals herd (partial core/inc-passion-skill herd)))}
@@ -604,8 +605,13 @@
         stores-filter (get-in project [:filter :stores])
         update-stores
         #(reduce
-          (fn [herd [resource amount]]
-            (update-in herd [:stores resource] - amount))
+          (fn [herd [resource required]]
+            (if (= :nutrition resource)
+              (core/consume-nutrition herd required)
+              (let [amount (if (> 1 required 0)
+                             (int (* required (count (:individuals herd))))
+                             required)]
+                (update-in herd [:stores resource] - amount))))
           %
           stores-filter)
         power-filter (get-in project [:filter :power])
