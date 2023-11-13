@@ -1,6 +1,7 @@
 (ns the-longtime-game.event-text 
   (:require [clojure.string :as string]
-            [the-longtime-game.core :as core]))
+            [the-longtime-game.core :as core]
+            [the-longtime-game.text :as text]))
 
 (def -trait->adj
   {:angry      "strong"
@@ -86,8 +87,51 @@
       "")))
 
 (defn gruxnis-attack!
-  [herd [victim ibba] & _]
-  "TODO")
+  [_herd [victim ibba] & _]
+  (text/join-text
+   "A Grux'nis is a great beast,
+   a glorious testament to the fecund murk
+   of the Yuliak Range's swampy base.
+   Tough and shiny scales,
+   quick and vicious beak,
+   and toesome flippers that flop on land
+   but fly in water.
+   They eat the bottom-feeders of the upland bogs,
+   but can be drawn by chance down the riverfloes
+   to the paths of the herds."
+   (:name victim) "was attacked on the beach,"
+   "where" (:name ibba) "fought it off with adroit hand and crushing arm."
+   "The beast was only scared back into the water, but not to end its ways.
+   So the threat remained."
+   (:name ibba) "traveled out lonesome to riddle with other herds"
+   "of how to pacify a Grux'nis.
+    In their heart they could not accept killing the animal outright,
+    though some argued easily for the necessity.
+    Facile, they thought.
+    But still they took a spear and went to kill the thing.
+    They goaded it with caught fish,
+    but recognized in its rampaging eye a worm --
+    a worm that aggravates the temper,
+    and elicits rampant violence,
+    that can be driven out with a tincture.
+    Deftly they fought with the beast, as the sun rose and fell,
+    nipping it with a blade bathed in sleeping poison.
+    Blow by blow, the Grux'nis staggered,
+    until it felt, and slept!
+    Asleep," (:name ibba) "could treat it."
+   "It awoke bound but clear-eyed."
+   (:name ibba) "would not take chances,"
+   "not more than this chance of knowing a Grux'nis in peace,
+    and though it struggled she watched it.
+    It was nervous now more than hungry, more than vicious.
+    So after a time they brought it to the river's edge and undid the bonds.
+    It fled, disappearing into the river with all the sound of a single droplet.
+    After that there were no more attacks.
+    The relief at violence averted brought great celebration."
+   "But" (:name ibba) "wondered still, where that creature"
+   "would go now. Back to the upland bogs, perhaps?
+    Or perhaps... to stay near,
+    to protect the one that saved its mind."))
 
 (def journeying-ends
   (fn [herd & _]
@@ -186,3 +230,27 @@
       (:name sadcow) "offers a small thanks,"
       "but their eyes go to the horizon,"
       "the world open to them unfettered."])))
+
+(def funeral
+  (fn [_herd [mourncow] deadcow]
+    (text/join-text
+     "All living things return to soil.
+      Life comes from life through death.
+      That is the cycle.
+      For the dead, the soil is turned over,
+      so that they lie deep beneath it,
+      and a sapling is placed over them.
+      What remains to mark their passing
+      is a mound in the earth
+      that becomes a limb of the land."
+     (:name deadcow) "was a friend of" (:name mourncow) ";"
+     "they will try to remember them fondly,
+      however bitterly their absence tastes.
+      They leave a complex legacy, a hole in the tapestry of the herd
+      that will take generations to scar over.
+      A friend heaps dirt on a hole in the ground
+      where their confidant will remain forever,
+      until the pieces of them return,
+      spoken by the tongues of the wind.
+      Life goes on,
+      differently.")))
