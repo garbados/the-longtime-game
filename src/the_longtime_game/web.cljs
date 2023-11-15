@@ -127,11 +127,10 @@
    [:div.level-left
     [:div.level-item
      [:h1.title "The Longtime"]]
-    (when (pos-int? (count @games))
-      [:div.level-item
-       [:button.button.is-primary
-        {:on-click #(reset! state :new-game)}
-        "New Game"]])
+    [:div.level-item
+     [:button.button.is-primary
+      {:on-click #(reset! state :new-game)}
+      "New Game"]]
     (when (pos-int? (count @games))
       [:div.level-item
        [:button.button.is-link
