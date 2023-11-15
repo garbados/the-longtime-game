@@ -1,0 +1,52 @@
+name: Deploy to GitHub Pages
+
+on: [workflow_dispatch]
+
+# on:
+#   push:
+#     branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # It is important to install java before installing clojure tools which needs java
+      # exclusions: babashka, clj-kondo and cljstyle
+      - name: Prepare java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'microsoft'
+          java-version: '17'
+
+      - name: Install clojure tools
+        uses: DeLaGuardo/setup-clojure@12.1
+        with:
+          cli: 1.11.1.1347
+
+      - name: Install NodeJS
+        uses: dcodeIO/setup-node-nvm@master
+        with:
+          node-version: lts/* 
+          
+      # Optional step:
+      - name: Cache clojure dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+            ~/.deps.clj
+            ~/.node_modules
+          # List all files containing dependencies:
+          key: cljdeps-${{ hashFiles('package.json') }}-${{ hashFiles('deps.clj') }}
+          restore-keys: cljdeps-
+      
+      - run: ./build-web.sh
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: .
