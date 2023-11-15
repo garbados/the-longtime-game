@@ -5,13 +5,12 @@
             [the-longtime-game.project :as project]
             [the-longtime-game.select :as select]
             [the-longtime-game.text :as text]
-            [the-longtime-game.building :as building]
             [the-longtime-game.meta-text :as meta-text]))
 
 (defn introduction
   [herd]
   (text/wrap-quote-sections
-   (string/split "\n\n" (meta-text/tutorial-text herd))))
+   (map text/wrap-text (string/split (meta-text/tutorial-text herd) #"\n\n"))))
 
 (def credits
   (text/wrap-quote-sections
