@@ -1,14 +1,15 @@
 (ns the-longtime-game.web
-  (:require [clojure.edn :as edn]
-            [clojure.spec.alpha :as s]
+  (:require ["pouchdb" :as pouchdb]
+            [clojure.edn :as edn]
             [clojure.string :as string]
-            ["pouchdb" :as pouchdb]
             [reagent.core :as r]
             [reagent.dom :as rd]
             [the-longtime-game.core :as core]
+            [the-longtime-game.event :as event]
             [the-longtime-game.meta-text :as meta-text]
+            [the-longtime-game.moment :as moment]
             [the-longtime-game.project :as project]
-            [the-longtime-game.select :as select]
+            [the-longtime-game.remark :as remark]
             [the-longtime-game.text :as text]))
 
 (defonce db (.default pouchdb "longtime"))
@@ -44,7 +45,8 @@
   (.then (fetch-doc name)
          (fn [herd*]
            (reset! herd herd*)
-           (reset! state :playing))))
+           (reset! state :playing)
+           (reset! gamestate :playing))))
 
 (defn- new-game [name]
   (reset! herd (core/gen-herd :spirit name))
@@ -397,6 +399,31 @@
            ^{:key (:terrain location)}
            (print-location location))]]))])
 
+(defn- playing []
+  (let [step (r/atom :event)]
+    (case @step
+      :event
+      (let [herd* (core/begin-month @herd)
+            location (core/current-location herd*)
+            steppe? (= :steppe (:terrain location))
+            event (when (zero? (rand-int 3))
+                    (event/pick-event herd*))
+            herd* (if-let [[name _text-fn effect] event]
+                    (assoc (effect) :event name)
+                    herd*)
+            remarks (if steppe?
+                      (remark/gen-remarks herd*)
+                      (string/join " " [(remark/gen-remarks herd*)
+                                        (moment/gen-moments herd*)]))]
+        [:div.box>div.content
+         [:h3 "Entering " (:name location) "..."]
+         [:p remarks]
+         (when event
+           [:p ((second event))])
+         [:button.button.is-fullwidth.is-primary
+          {:on-click #(reset! step :projects)}
+          "Proceed to select projects"]]))))
+
 (defn- app []
   [:section.section
    [navbar]
@@ -416,6 +443,6 @@
                       :projects [projects]
                       :individuals [individuals]
                       :path [path]
-                      :playing [:p "TODO"])]])]])
+                      :playing [playing])]])]])
 
 (rd/render [app] (js/document.getElementById "app"))
