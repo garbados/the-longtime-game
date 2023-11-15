@@ -28,8 +28,8 @@ jobs:
 
       - name: Install NodeJS
         uses: dcodeIO/setup-node-nvm@master
-          with:
-            node-version: lts/* 
+        with:
+          node-version: lts/* 
           
       # Optional step:
       - name: Cache clojure dependencies
