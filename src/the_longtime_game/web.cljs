@@ -1,13 +1,15 @@
 (ns the-longtime-game.web
   (:require [clojure.edn :as edn]
+            [clojure.spec.alpha :as s]
             [clojure.string :as string]
-            [pouchdb]
+            ["pouchdb" :as pouchdb]
             [reagent.core :as r]
             [reagent.dom :as rd]
             [the-longtime-game.core :as core]
-            [the-longtime-game.meta-text :refer [intro-text tutorial-text]]
-            [the-longtime-game.building :as building]
-            [the-longtime-game.project :as project]))
+            [the-longtime-game.meta-text :as meta-text]
+            [the-longtime-game.project :as project]
+            [the-longtime-game.select :as select]
+            [the-longtime-game.text :as text]))
 
 (defonce db (.default pouchdb "longtime"))
 (defonce state (r/atom :loading))
@@ -84,7 +86,7 @@
     [:div
      [:div.box
       [:div.content
-       [:h3 intro-text]]]
+       [:h3 meta-text/intro-text]]]
      [:div.field
       [:label.label "What shall the herd call you?"]
       [:div.control
@@ -130,7 +132,7 @@
                         (reset! gamestate :playing))}
         "Play Game"]])
     (when (some? @herd)
-      (for [state* [:intro :projects :individuals]
+      (for [state* [:intro :projects :individuals :path]
             :let [name* (-> state* name string/capitalize)]]
         ^{:key state*}
         [:div.level-item
@@ -179,11 +181,7 @@
           (when (some? (:wild? location))
             (str "Wild? " (:wild? location)))
           (when-let [infra (seq (:infra location))]
-            (str "Infra: "
-                 (->> infra
-                      (map building/building->name)
-                      sort
-                      (string/join ", "))))])]
+            (str "Infra: " (string/join ", " (sort (map text/normalize-name infra)))))])]
     [:li
      [:span (str "Location: " (:name location))]
      [:ul
@@ -191,7 +189,7 @@
         ^{:key s} [:li s])]]))
 
 (defn- print-location-brief [location]
-  (let [infra (seq (map building/building->name (:infra location)))]
+  (let [infra (seq (map text/normalize-name (:infra location)))]
     [:li (str (:name location) (if infra (str ": " (string/join ", " infra)) ""))]))
 
 (defn- print-herd []
@@ -233,13 +231,13 @@
         (let [skills (->> core/skills
                           (map
                            (fn [skill]
-                             [skill (core/collective-skill herd skill)]))
+                             [skill (core/collective-skill herd* skill)]))
                           sort)]
           [:table.table
            [:thead
             [:tr
              (for [[skill _] skills]
-               ^{:key skill} [:th (-> skill name string/capitalize)])]]
+               ^{:key skill} [:th (text/normalize-name skill)])]]
            [:tbody
             [:tr
              (for [[skill amount] skills]
@@ -251,7 +249,7 @@
            [:thead
             [:tr
              (for [[resource _] stores*]
-               ^{:key resource} [:th (-> resource name string/capitalize)])]]
+               ^{:key resource} [:th (text/normalize-name resource)])]]
            [:tbody
             [:tr
              (for [[resource amount] stores*]
@@ -264,22 +262,106 @@
             ^{:key (:terrain location)} [print-location-brief location])]]]]]]))
 
 (defn- intro []
-  [:div.box>div.content
-   (let [lines (string/split-lines (tutorial-text @herd))]
-     (for [i (range (count lines))
-           :let [line (nth lines i)]]
-       ^{:key i} [:p line]))])
+  [:div
+   [:div.box>div.content
+    (let [lines (string/split-lines (meta-text/tutorial-text @herd))]
+      (for [i (range (count lines))
+            :let [line (nth lines i)]]
+        ^{:key i} [:p line]))]
+   [:button.button.is-fullwidth.is-primary
+    {:on-click #(reset! gamestate :playing)}
+    "Then let us begin!"]])
 
-(defn- wiki-projects []
+(defn- explain-map [map*]
+  [:ul
+   (for [[x y] map*]
+     ^{:key x} [:li (str (text/normalize-name x) ": " (text/normalize-name y))])])
+
+(defn- explain-filter [{:keys [stores skills terrain season infra space contacts power]}]
+  [:ul
+   (when stores
+     [:li
+      [:span "Required resources:"]
+      [explain-map stores]])
+   (when skills
+     [:li
+      [:span "Required skills:"]
+      [explain-map skills]])
+   (when terrain
+     [:li (str "Only in "
+               (text/normalize-name terrain))])
+   (when season
+     [:li (str "Only during "
+               (core/int->season season))])
+   (when infra
+     [:li (str "Needs "
+               (cond
+                 (seq? infra) (string/join ", " (map text/normalize-name infra))
+                 :else        (text/normalize-name infra)))])
+   (when space
+     [:li (str "Needs in orbit: "
+               (cond
+                 (seq? space) (string/join ", " (map text/normalize-name space))
+                 :else        (text/normalize-name space)))])
+   (when contacts
+     [:li (str "Requires relations with "
+               (cond
+                 (seq? contacts) (string/join ", " (map text/normalize-name contacts))
+                 :else           (text/normalize-name contacts)))])
+   (when power
+     [:li (str "Requires " power " energy")])])
+
+(defn- projects []
   [:div.box>div.content
    [:h3 "Projects"]
+   [:p meta-text/projects-description]
+   [:hr]
    (for [project (sort-by :name project/projects)]
      ^{:key (:name project)}
      [:div.box
       [:p [:strong (:name project)]]
       [:p
        [:span (:description project)]
-       [:em (str " " (:detail project))]]])])
+       [:em (str " " (:detail project))]]
+      (when-let [uses (seq (:uses project))]
+        [:p (str "Uses " (string/join ", " (map name uses)) ".")])
+      (when-let [filter* (:filter project)]
+        [explain-filter filter*])])])
+
+(defn- individuals []
+  [:div.box>div.content
+   [:h3 "Individuals"]
+   [:p "TODO helptext"]
+   [:hr]
+   (let [herd* @herd]
+     (for [individual (:individuals herd*)
+           :let [smiley (cond
+                          (> (:fulfillment individual) (* core/max-fulfillment (/ 2 3))) "😄"
+                          (> (:fulfillment individual) (* core/max-fulfillment (/ 1 2))) "😀"
+                          (> (:fulfillment individual) (* core/max-fulfillment (/ 1 3))) "🙁"
+                          :else "😢")]]
+       ^{:key (str individual)}
+       [:div.box
+        [:p [:strong (str (:name individual) ", "
+                          (core/get-age herd* individual) ", "
+                          smiley)]]
+        [:ul
+         (when-let [passions (seq (:passions individual))]
+           [:li (str "Passions: " (string/join ", " (map text/normalize-name passions)))])
+         (when-let [traits (seq (:traits individual))]
+           [:li (str "Traits: " (string/join ", " (map text/normalize-name traits)))])
+         (when-let [skills (sort-by first (seq (:skills individual)))]
+           [:li
+            [:span (str "Skills:")]
+            [:table.table
+             [:thead
+              [:tr
+               (for [[skill _] skills]
+                 ^{:key skill} [:th (text/normalize-name skill)])]]
+             [:tbody
+              [:tr
+               (for [[skill amount] skills]
+                 ^{:key skill} [:td amount])]]]])]]))])
 
 (defn- app []
   [:section.section
@@ -296,8 +378,9 @@
                    [:div.column.is-half-desktop
                     (case @gamestate
                       :intro [intro]
-                      :projects [wiki-projects]
-                      :individuals [:p "TODO"]
+                      :projects [projects]
+                      :individuals [individuals]
+                      :path [:p "TODO"]
                       :playing [:p "TODO"])]])]])
 
 (rd/render [app] (js/document.getElementById "app"))

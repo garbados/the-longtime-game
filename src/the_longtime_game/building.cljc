@@ -1,6 +1,5 @@
 (ns the-longtime-game.building 
   (:require [clojure.spec.alpha :as s]
-            [clojure.string :as string]
             [the-longtime-game.core :as core]
             [the-longtime-game.select :as select]))
 
@@ -190,13 +189,3 @@
      :filter
      {:stores {:wood 10 :stone 10 :tools 10}
       :skills {:craftwork 20}}}]))
-
-(defn building->name
-  [building]
-  (->> (string/split (name building) #"-")
-       (map string/capitalize)
-       (string/join " ")))
-
-(s/fdef building->name
-  :args (s/cat :building ::core/building)
-  :ret string?)

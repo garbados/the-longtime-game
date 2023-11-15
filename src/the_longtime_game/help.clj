@@ -41,8 +41,8 @@
            (let [[kind x] (s/conform ::select/infra infra)]
              (str "infra: "
                   (case kind
-                    :one (building/building->name x)
-                    :many (string/join ", " (map building/building->name x))))))
+                    :one (text/normalize-name x)
+                    :many (string/join ", " (map text/normalize-name x))))))
          (when-let [space (:space filter*)]
            (let [[kind x] (s/conform ::select/space space)]
              (str "space: "

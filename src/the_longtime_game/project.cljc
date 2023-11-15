@@ -5,7 +5,8 @@
             [the-longtime-game.building :as building]
             [the-longtime-game.core :as core]
             [the-longtime-game.select :as select]
-            [the-longtime-game.space-text :as space-text]))
+            [the-longtime-game.space-text :as space-text]
+            [the-longtime-game.text :as text]))
 
 (def base-need 50)
 (def low-need 10)
@@ -40,7 +41,7 @@
   (for [[name*
          {:keys [description detail uses filter filter-fn text-fn]}]
         building/building->info]
-    (cond-> {:name (str "Construct " (building/building->name name*))
+    (cond-> {:name (str "Construct " (text/normalize-name name*))
              :description description
              :detail detail
              :uses (cond

@@ -94,3 +94,10 @@
      "Now you are ready to look after" (str (:name herd) ".") 
      "Will you see them to new homes among the stars?
       Or will famine and want tear you apart?")]))
+
+(def projects-description
+  (text/join-text
+   "Projects are how the herd organizes its collective efforts during the month.
+    They usually require resources or have skill thresholds;
+    you will gain access to more projects as your herd advances.
+    Research this list to learn more about what your herd can eventually accomplish."))
