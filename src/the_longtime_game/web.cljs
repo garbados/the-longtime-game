@@ -83,7 +83,7 @@
 
 (defn- init-new-game []
   (let [value (r/atom "")]
-    [:div
+    [:div.container
      [:div.box
       [:div.content
        [:h3 meta-text/intro-text]]]
@@ -93,22 +93,32 @@
        [prompt-text value new-game]]]]))
 
 (defn- list-games []
-  [:div
+  [:div.container>div.box>div.content
    [:p "Select a game to play:"]
    [:ul
     (for [game @games]
       ^{:key game}
-      [:li
-       [:button.button.is-text
-        {:on-click #(load-game game)}
-        (str game)]
-       [:button.button.is-text
-        {:on-click #(delete-game game)}
-        "Delete!"]])]])
+      [:div.block
+       [:div.columns
+        [:div.column
+         [:button.button.is-text.is-fullwidth
+          {:on-click #(load-game game)}
+          (str game)]]
+        [:div.column.is-narrow
+         [:button.button.is-danger
+          {:on-click #(delete-game game)}
+          "X"]]]])]])
 
 (defn- loading []
   (setup)
-  [:h1 "Loading..."])
+  [:div.container>div.box>div.content
+   [:h3 "Loading..."]])
+
+(defn- credits []
+  [:div.container>div.box>div.content
+   [:h3 "Credits"]
+   (for [line (string/split-lines meta-text/credits-description)]
+     [:p line])])
 
 (defn- navbar []
   [:div.level
@@ -137,9 +147,14 @@
         ^{:key state*}
         [:div.level-item
          [:button.button.is-info
-          {:on-click #(reset! gamestate state*)}
+          {:on-click #(do (reset! state :playing)
+                          (reset! gamestate state*))}
           name*]]))]
    [:div.level-right
+    [:div.level-item
+     [:button.button.is-info.is-light
+      {:on-click #(reset! state :credits)}
+      "Credits"]]
     [:div.level-item
      [:a.button.is-info.is-light
       {:href "https://github.com/garbados/the-longtime-game"
@@ -198,72 +213,72 @@
          :as herd*}
         @herd
         population (count individuals)]
-    [:div.box
-     [:div.content
-      [:h3 (:name herd*)]
-      [:h5 (str "Shepherded by the " spirit)]
-      [:ul
-       [:li (let [month (inc (rem month 12))
-                  year (inc (int (/ month 12)))
-                  season (core/int->season (core/get-season herd*))]
-              (str "Year " year ", month " month " (" season ")"))]
-       [:li (str "Population: " population)]
-       [:li (str "Syndicates: " (string/join ", " (sort (map core/syndicate-name syndicates))))]
-       [:li (let [need (core/calc-food-need population)
-                  ok? (core/herd-has-nutrition? herd* need)
-                  ! (if ok? "" "!")]
-              (str "Hunger: " hunger " (-" need ! ")"))]
-       [:li (let [need (core/calc-meds-need population)
-                  ok? (>= (get-in herd [:stores :poultices] 0) need)
-                  value (str (int (* (/ sickness population) 100)) "%")
-                  ! (if ok? "" "!")]
-              (str "Sickness: " value " (-" need ! ")"))]
-       [:li (let [fulfillments (map :fulfillment individuals)
-                  average (/ (reduce + 0 fulfillments) population)
-                  minimum (reduce min fulfillments)
-                  maximum (reduce max fulfillments)]
-              (str "Fulfillment: "
-                   "avg " (int average) "%; "
-                   "min " minimum "%; "
-                   "max " maximum "%"))]
-       [:li
-        [:span "Skills:"]
-        (let [skills (->> core/skills
-                          (map
-                           (fn [skill]
-                             [skill (core/collective-skill herd* skill)]))
-                          sort)]
-          [:table.table
-           [:thead
-            [:tr
-             (for [[skill _] skills]
-               ^{:key skill} [:th (text/normalize-name skill)])]]
-           [:tbody
-            [:tr
-             (for [[skill amount] skills]
-               ^{:key skill} [:td amount])]]])]
-       [:li
-        [:span "Stores:"]
-        (let [stores* (sort (seq stores))]
-          [:table.table
-           [:thead
-            [:tr
-             (for [[resource _] stores*]
-               ^{:key resource} [:th (text/normalize-name resource)])]]
-           [:tbody
-            [:tr
-             (for [[resource amount] stores*]
-               ^{:key resource} [:td amount])]]])]
-       [print-location (core/current-location herd*)]
-       [:li
-        [:span "Next Stage:"
-         [:ul
-          (for [location (sort-by :name (second path))]
-            ^{:key (:terrain location)} [print-location-brief location])]]]]]]))
+    [:div.box>div.content
+     [:h3 (:name herd*)]
+     [:h5 (str "Shepherded by the " spirit)]
+     [:ul
+      [:li (let [month (inc (rem month 12))
+                 year (inc (int (/ month 12)))
+                 season (core/int->season (core/get-season herd*))]
+             (str "Year " year ", month " month " (" season ")"))]
+      [:li (str "Population: " population)]
+      [:li (str "Syndicates: " (string/join ", " (sort (map core/syndicate-name syndicates))))]
+      [:li (let [need (core/calc-food-need population)
+                 ok? (core/herd-has-nutrition? herd* need)
+                 ! (if ok? "" "!")]
+             (str "Hunger: " hunger " (-" need ! ")"))]
+      [:li (let [need (core/calc-meds-need population)
+                 ok? (>= (get-in herd [:stores :poultices] 0) need)
+                 value (str (int (* (/ sickness population) 100)) "%")
+                 ! (if ok? "" "!")]
+             (str "Sickness: " value " (-" need ! ")"))]
+      [:li (let [fulfillments (map :fulfillment individuals)
+                 average (/ (reduce + 0 fulfillments) population)
+                 minimum (reduce min fulfillments)
+                 maximum (reduce max fulfillments)]
+             (str "Fulfillment: "
+                  "avg " (int average) "%; "
+                  "min " minimum "%; "
+                  "max " maximum "%"))]
+      [:li
+       [:span "Skills:"]
+       (let [skills (->> core/skills
+                         (map
+                          (fn [skill]
+                            [skill (core/collective-skill herd* skill)]))
+                         sort)]
+         [:table.table
+          [:thead
+           [:tr
+            (for [[skill _] skills]
+              ^{:key skill} [:th (text/normalize-name skill)])]]
+          [:tbody
+           [:tr
+            (for [[skill amount] skills]
+              ^{:key skill} [:td amount])]]])]
+      [:li
+       [:span "Stores:"]
+       (let [stores* (sort (seq stores))]
+         [:table.table
+          [:thead
+           [:tr
+            (for [[resource _] stores*]
+              ^{:key resource} [:th (text/normalize-name resource)])]]
+          [:tbody
+           [:tr
+            (for [[resource amount] stores*]
+              ^{:key resource} [:td amount])]]])]
+      [print-location (core/current-location herd*)]
+      [:li
+       [:span "Next Stage:"
+        [:ul
+         (for [location (sort-by :name (second path))]
+           ^{:key (:terrain location)} [print-location-brief location])]]]]]))
 
 (defn- intro []
   [:div
    [:div.box>div.content
+    [:h3 "Welcome to " [:em "The Longtime"]]
     (let [lines (string/split-lines (meta-text/tutorial-text @herd))]
       (for [i (range (count lines))
             :let [line (nth lines i)]]
@@ -331,10 +346,10 @@
 (defn- individuals []
   [:div.box>div.content
    [:h3 "Individuals"]
-   [:p "TODO helptext"]
+   [:p meta-text/individuals-description]
    [:hr]
    (let [herd* @herd]
-     (for [individual (:individuals herd*)
+     (for [individual (sort-by :name (:individuals herd*))
            :let [smiley (cond
                           (> (:fulfillment individual) (* core/max-fulfillment (/ 2 3))) "😄"
                           (> (:fulfillment individual) (* core/max-fulfillment (/ 1 2))) "😀"
@@ -363,6 +378,25 @@
                (for [[skill amount] skills]
                  ^{:key skill} [:td amount])]]]])]]))])
 
+(defn- path []
+  [:div.box>div.content
+   [:h3 "The Path"]
+   [:p meta-text/path-description]
+   [:hr]
+   (let [herd* @herd]
+     (for [i (range (count (:path herd*)))
+           :let [stage (-> herd* :path (nth i))]]
+       ^{:key i}
+       [:div.box
+        [:p [:strong (cond
+                       (zero? i) (str "Stage " (inc i) " (current)")
+                       (= 1 i)   (str "Stage " (inc i) " (next)")
+                       :else     (str "Stage " (inc i)))]]
+        [:ul
+         (for [location stage]
+           ^{:key (:terrain location)}
+           (print-location location))]]))])
+
 (defn- app []
   [:section.section
    [navbar]
@@ -372,6 +406,7 @@
       :loading    [loading]
       :new-game   [init-new-game]
       :list-games [list-games]
+      :credits    [credits]
       :playing    [:div.columns
                    [:div.column.is-half-desktop
                     [print-herd]]
@@ -380,7 +415,7 @@
                       :intro [intro]
                       :projects [projects]
                       :individuals [individuals]
-                      :path [:p "TODO"]
+                      :path [path]
                       :playing [:p "TODO"])]])]])
 
 (rd/render [app] (js/document.getElementById "app"))
