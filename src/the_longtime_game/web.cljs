@@ -18,6 +18,22 @@
 (defonce game (r/atom nil))
 (defonce herd (r/atom nil))
 (defonce gamestate (r/atom :intro))
+(defonce monthstep (r/atom :event))
+(defonce extra? (r/atom false))
+(defonce extrachoice (r/atom nil))
+
+(def dismantle-infra
+  {:name "Dismantle infrastructue"
+   :uses [:craftwork]
+   :filter-fn
+   (fn [herd]
+     (seq (:infra (core/current-location herd))))
+   :effect
+   (fn [herd location]
+     (core/assoc-location herd (disj location :infra @extrachoice)))})
+
+(def web-projects
+  (conj project/projects dismantle-infra))
 
 (defn- find-games []
   (.then (.allDocs db)
@@ -229,7 +245,7 @@
                  ! (if ok? "" "!")]
              (str "Hunger: " hunger " (-" need ! ")"))]
       [:li (let [need (core/calc-meds-need population)
-                 ok? (>= (get-in herd [:stores :poultices] 0) need)
+                 ok? (>= (get-in herd* [:stores :poultices] 0) need)
                  value (str (int (* (/ sickness population) 100)) "%")
                  ! (if ok? "" "!")]
              (str "Sickness: " value " (-" need ! ")"))]
@@ -398,30 +414,76 @@
            ^{:key (:terrain location)}
            (print-location location))]]))])
 
+(defn- apply-upkeep []
+  (swap! herd core/apply-herd-upkeep)
+  (reset! monthstep :dream))
+
+(defn- enact-project [proj]
+  (if (= (:name proj) (:name dismantle-infra))
+    (reset! extra? true)
+    (let [herd* (-> (project/do-project @herd proj)
+                    (update :projects conj name))]
+      (reset! herd herd*)
+      (when (= 3 (count (:projects herd*)))
+        (apply-upkeep)))))
+
+(defn- handle-dream [])
+
+
 (defn- playing []
-  (let [step (r/atom :event)]
-    (case @step
-      :event
-      (let [herd* (core/begin-month @herd)
-            location (core/current-location herd*)
-            steppe? (= :steppe (:terrain location))
-            event (when (zero? (rand-int 3))
-                    (event/pick-event herd*))
-            herd* (if-let [[name _text-fn effect] event]
-                    (assoc (effect) :event name)
-                    herd*)
-            remarks (if steppe?
-                      (remark/gen-remarks herd*)
-                      (string/join " " [(remark/gen-remarks herd*)
-                                        (moment/gen-moments herd*)]))]
+  (case @monthstep
+    :event
+    (let [herd* (core/begin-month @herd)
+          location (core/current-location herd*)
+          steppe? (= :steppe (:terrain location))
+          event (when (zero? (rand-int 3))
+                  (event/pick-event herd*))
+          herd* (if-let [[name _text-fn effect] event]
+                  (assoc (effect) :event name)
+                  herd*)
+          remarks (if steppe?
+                    (remark/gen-remarks herd*)
+                    (string/join " " [(remark/gen-remarks herd*)
+                                      (moment/gen-moments herd*)]))]
+      [:div.box>div.content
+       [:h3 "Entering " (:name location) "..."]
+       [:p remarks]
+       (when event
+         [:p ((second event))])
+       [:button.button.is-fullwidth.is-primary
+        {:on-click #(do (reset! herd herd*)
+                        (reset! monthstep :projects))}
+        "Proceed to select projects"]])
+    :projects
+    (let [herd* @herd
+          i (inc (count (:projects herd*)))
+          candidates
+          (filter (partial project/can-enact? herd*)
+                  web-projects)]
+      (if @extra?
         [:div.box>div.content
-         [:h3 "Entering " (:name location) "..."]
-         [:p remarks]
-         (when event
-           [:p ((second event))])
-         [:button.button.is-fullwidth.is-primary
-          {:on-click #(reset! step :projects)}
-          "Proceed to select projects"]]))))
+         [:h3 (str "Select what to dismantle:")]
+         (for [infra (:infra (core/current-location herd))]
+           ^{:key infra}
+           [:p
+            [:button.button.is-info.is-fullwidth
+             {:on-click #(do (reset! extrachoice infra)
+                             (enact-project dismantle-infra)
+                             (reset! extra? false)
+                             (reset! extrachoice nil))}
+             (text/normalize-name infra)]])]
+        [:div.box>div.content
+         [:h3 (str "Select project " i " of 3:")]
+         (for [{:keys [name] :as proj} (sort-by :name candidates)]
+           ^{:key name}
+           [:p
+            [:button.button.is-info.is-fullwidth
+             {:on-click #(enact-project proj)}
+             name]])]))
+    :upkeep
+    [:p "TODO"]
+    :dream
+    [:p "TODO"]))
 
 (defn- app []
   [:section.section
