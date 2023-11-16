@@ -1,6 +1,7 @@
 (ns the-longtime-game.meta-text 
   (:require [clojure.string :as string]
-          [the-longtime-game.text :as text]))
+            [the-longtime-game.core :as core]
+            [the-longtime-game.text :as text]))
 
 (def intro-text
   (text/join-text
@@ -136,3 +137,36 @@
       but especial thanks go to my partner Lucia Brody
       for developing with me the whole universe of *The Shepherd*,
       of which Minots are only a part.")]))
+
+(def syndicate-remarks
+  {:athletics
+   ["rigorous exertion"
+    "strenuous feats"]
+   :craftwork
+   ["strange inventions"
+    "curious designs"]
+   :geology
+   ["beautiful stonework"
+    "earthen foresight"]
+   :herbalism
+   ["advanced greenlore"
+    "keen pathfinding"]
+   :medicine
+   ["enlightening panaceas"
+    "gourmet dining"]
+   :organizing
+   ["meticulous planning"
+    "historical consideration"]})
+
+(defn announce-syndicate [syndicate]
+  (let [remarks (map syndicate-remarks syndicate)
+        [r1 r2] (map rand-nth remarks)]
+    (text/join-text
+     "Record-keepers and rhetoricians rejoice!"
+     "Enthusiasts have joined together in debate and duel."
+     "They bicker and bother, sussing with susurrus"
+     "the finer points of some greater ethos."
+     (str "Through " r1 " and " r2 ",")
+     "a potent consensus emerges,"
+     "a bright and capable vision!"
+     (str "So is founded " (core/syndicate-name syndicate) "."))))

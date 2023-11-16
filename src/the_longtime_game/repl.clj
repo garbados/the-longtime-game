@@ -9,7 +9,8 @@
             [the-longtime-game.project :as project]
             [the-longtime-game.remark :as remark]
             [the-longtime-game.text :refer [join-text match-prefix quote-text
-                                            wrap-options wrap-quote-text]]))
+                                            wrap-options wrap-quote-text]]
+            [the-longtime-game.meta-text :as meta-text]))
 
 (defn exit-game [& _] (System/exit 0))
 
@@ -438,41 +439,13 @@
       (println (quote-text "The herd rushes unfettered across the steppe.")))
     (await-confirmation herd)))
 
-(def syndicate-remarks
-  {:athletics
-   ["rigorous exertion"
-    "strenuous feats"]
-   :craftwork
-   ["strange inventions"
-    "curious designs"]
-   :geology
-   ["beautiful stonework"
-    "earthen foresight"]
-   :herbalism
-   ["advanced greenlore"
-    "keen pathfinding"]
-   :medicine
-   ["enlightening panaceas"
-    "gourmet dining"]
-   :organizing
-   ["meticulous planning"
-    "historical consideration"]})
+
 
 (defn announce-new-syndicate
   [candidate]
-  (let [remarks (map syndicate-remarks candidate)
-        [r1 r2] (map rand-nth remarks)]
-    (println
-     (wrap-quote-text
-      (join-text
-       "Record-keepers and rhetoricians rejoice!"
-       "Enthusiasts have joined together in debate and duel."
-       "They bicker and bother, sussing with susurrus"
-       "the finer points of some greater ethos."
-       (str "Through " r1 " and " r2 ",")
-       "a potent consensus emerges,"
-       "a bright and capable vision!"
-       (str "So is founded " (core/syndicate-name candidate) "."))))))
+  (println
+   (wrap-quote-text
+    (meta-text/announce-syndicate candidate))))
 
 (defn maybe-add-syndicate
   [herd]

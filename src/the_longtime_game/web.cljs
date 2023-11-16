@@ -4,6 +4,7 @@
             [clojure.string :as string]
             [reagent.core :as r]
             [reagent.dom :as rd]
+            [the-longtime-game.contact-text :as contact-text]
             [the-longtime-game.core :as core]
             [the-longtime-game.dream :as dream]
             [the-longtime-game.event :as event]
@@ -417,9 +418,6 @@
            ^{:key (:terrain location)}
            (print-location location))]]))])
 
-#_(defn- apply-upkeep []
-  (swap! herd core/apply-herd-upkeep))
-
 (defn- handle-event []
   (let [herd*    (core/begin-month @herd)
         location (core/current-location herd*)
@@ -479,32 +477,53 @@
            {:on-click #(enact-project proj)}
            name]])])))
 
-(defn- handle-dream-choices [choice choices]
-  )
+(defn- handle-dream [choice]
+  (if-let [dream (and (zero? (rand-int 3))
+                      (dream/pick-dream @herd))]
+    (let [[options text-fn post-text-fn effect]
+          (dream/marshal-dream @herd dream)
+          blurb (text-fn)]
+      [:div.box>div.content
+       [:h3 "A dreamer visits you..."]
+       [:p blurb]
+       (when (and (nil? @choice)
+                  (seq options))
+         [:p [:strong "How do you counsel?"]]
+         (for [option options]
+           ^{:key option}
+           [:button.button.is-fullwidth.is-primary.is-light
+            {:on-click #(reset! choice option)}
+            (text/normalize-name option)]))
+       (when (or (some? @choice) (nil? (seq options)))
+         (when-let [post-blurb (post-text-fn @choice)]
+           [:p post-blurb])
+         [:button.button.is-fullwidth.is-primary
+          {:on-click #(do (reset! herd (effect))
+                          (reset! monthstep :upkeep))}
+          "The dreamer returns to their rest..."])])
+    (reset! monthstep :upkeep)))
 
-(defn- handle-dream []
-  (let [herd* @herd
-        dream (dream/pick-dream herd*)
-        [choices text-fn post-text-fn effect]
-        (dream/marshal-dream herd* dream)
-        choice (r/atom nil)
-        blurb (text-fn)]
+(defn- handle-upkeep []
+  (let [herd* @herd]
     [:div.box>div.content
-     [:h3 "A dreamer visits you..."]
-     (if (seq choices)
-       [handle-dream-choices choice choices]
-       )]
-    ))
-
+     [:h3 "End of the month"]
+     (when-let [contact (and (core/new-contact? herd*)
+                             (core/get-next-contact herd*))]
+       (swap! herd update :contacts conj contact)
+       [:p (contact-text/contact->blurb contact)])
+     (when (core/should-add-syndicate? herd*)
+       (let [votes (core/tally-votes (:individuals herd*))
+             candidates (core/rank-candidates votes)]
+         (when-let [candidate (core/select-candidate (:syndicates herd*) candidates)]
+           (swap! herd update :syndicates conj candidate)
+           [:p (meta-text/announce-syndicate candidate)])))]))
 
 (defn- playing []
   (case @monthstep
-    :event [handle-event]
+    :event    [handle-event]
     :projects [handle-projects]
-    :dream
-    [:p "TODO"]
-    :upkeep
-    [:p "TODO"]))
+    :dream    [handle-dream (r/atom nil)]
+    :upkeep   [:p "TODO"]))
 
 (defn- app []
   [:section.section
