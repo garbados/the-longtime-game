@@ -5,6 +5,7 @@
             [reagent.core :as r]
             [reagent.dom :as rd]
             [the-longtime-game.core :as core]
+            [the-longtime-game.dream :as dream]
             [the-longtime-game.event :as event]
             [the-longtime-game.meta-text :as meta-text]
             [the-longtime-game.moment :as moment]
@@ -54,15 +55,17 @@
       (.then #(.remove db %))))
 
 (defn- save-game []
-  (save-doc @game @herd))
+  (save-doc @game {:herd @herd
+                   :monthstep @monthstep}))
 
 (defn- load-game [name]
   (reset! game name)
   (.then (fetch-doc name)
-         (fn [herd*]
-           (reset! herd herd*)
+         (fn [doc]
+           (reset! herd (:herd doc))
            (reset! state :playing)
-           (reset! gamestate :playing))))
+           (reset! gamestate :playing)
+           (reset! monthstep (:monthstep doc)))))
 
 (defn- new-game [name]
   (reset! herd (core/gen-herd :spirit name))
@@ -414,9 +417,31 @@
            ^{:key (:terrain location)}
            (print-location location))]]))])
 
-(defn- apply-upkeep []
-  (swap! herd core/apply-herd-upkeep)
-  (reset! monthstep :dream))
+#_(defn- apply-upkeep []
+  (swap! herd core/apply-herd-upkeep))
+
+(defn- handle-event []
+  (let [herd*    (core/begin-month @herd)
+        location (core/current-location herd*)
+        steppe?  (= :steppe (:terrain location))
+        event    (when (zero? (rand-int 3))
+                   (event/pick-event herd*))
+        herd*    (if-let [[name _text-fn effect] event]
+                   (assoc (effect) :event name)
+                   herd*)
+        remarks  (if steppe?
+                   (remark/gen-remarks herd*)
+                   (string/join " " [(remark/gen-remarks herd*)
+                                     (moment/gen-moments herd*)]))]
+    [:div.box>div.content
+     [:h3 "Entering " (:name location) "..."]
+     [:p remarks]
+     (when event
+       [:p ((second event))])
+     [:button.button.is-fullwidth.is-primary
+      {:on-click #(do (reset! herd herd*)
+                      (reset! monthstep :projects))}
+      "Proceed to select projects"]]))
 
 (defn- enact-project [proj]
   (if (= (:name proj) (:name dismantle-infra))
@@ -425,64 +450,60 @@
                     (update :projects conj name))]
       (reset! herd herd*)
       (when (= 3 (count (:projects herd*)))
-        (apply-upkeep)))))
+        (reset! monthstep :dream)))))
 
-(defn- handle-dream [])
+(defn- handle-projects []
+  (let [herd* @herd
+        i (inc (count (:projects herd*)))
+        candidates
+        (filter (partial project/can-enact? herd*)
+                web-projects)]
+    (if @extra?
+      [:div.box>div.content
+       [:h3 (str "Select what to dismantle:")]
+       (for [infra (:infra (core/current-location herd))]
+         ^{:key infra}
+         [:p
+          [:button.button.is-info.is-fullwidth
+           {:on-click #(do (reset! extrachoice infra)
+                           (enact-project dismantle-infra)
+                           (reset! extra? false)
+                           (reset! extrachoice nil))}
+           (text/normalize-name infra)]])]
+      [:div.box>div.content
+       [:h3 (str "Select project " i " of 3:")]
+       (for [{:keys [name] :as proj} (sort-by :name candidates)]
+         ^{:key name}
+         [:p
+          [:button.button.is-info.is-fullwidth
+           {:on-click #(enact-project proj)}
+           name]])])))
+
+(defn- handle-dream-choices [choice choices]
+  )
+
+(defn- handle-dream []
+  (let [herd* @herd
+        dream (dream/pick-dream herd*)
+        [choices text-fn post-text-fn effect]
+        (dream/marshal-dream herd* dream)
+        choice (r/atom nil)
+        blurb (text-fn)]
+    [:div.box>div.content
+     [:h3 "A dreamer visits you..."]
+     (if (seq choices)
+       [handle-dream-choices choice choices]
+       )]
+    ))
 
 
 (defn- playing []
   (case @monthstep
-    :event
-    (let [herd* (core/begin-month @herd)
-          location (core/current-location herd*)
-          steppe? (= :steppe (:terrain location))
-          event (when (zero? (rand-int 3))
-                  (event/pick-event herd*))
-          herd* (if-let [[name _text-fn effect] event]
-                  (assoc (effect) :event name)
-                  herd*)
-          remarks (if steppe?
-                    (remark/gen-remarks herd*)
-                    (string/join " " [(remark/gen-remarks herd*)
-                                      (moment/gen-moments herd*)]))]
-      [:div.box>div.content
-       [:h3 "Entering " (:name location) "..."]
-       [:p remarks]
-       (when event
-         [:p ((second event))])
-       [:button.button.is-fullwidth.is-primary
-        {:on-click #(do (reset! herd herd*)
-                        (reset! monthstep :projects))}
-        "Proceed to select projects"]])
-    :projects
-    (let [herd* @herd
-          i (inc (count (:projects herd*)))
-          candidates
-          (filter (partial project/can-enact? herd*)
-                  web-projects)]
-      (if @extra?
-        [:div.box>div.content
-         [:h3 (str "Select what to dismantle:")]
-         (for [infra (:infra (core/current-location herd))]
-           ^{:key infra}
-           [:p
-            [:button.button.is-info.is-fullwidth
-             {:on-click #(do (reset! extrachoice infra)
-                             (enact-project dismantle-infra)
-                             (reset! extra? false)
-                             (reset! extrachoice nil))}
-             (text/normalize-name infra)]])]
-        [:div.box>div.content
-         [:h3 (str "Select project " i " of 3:")]
-         (for [{:keys [name] :as proj} (sort-by :name candidates)]
-           ^{:key name}
-           [:p
-            [:button.button.is-info.is-fullwidth
-             {:on-click #(enact-project proj)}
-             name]])]))
-    :upkeep
-    [:p "TODO"]
+    :event [handle-event]
+    :projects [handle-projects]
     :dream
+    [:p "TODO"]
+    :upkeep
     [:p "TODO"]))
 
 (defn- app []
