@@ -1,0 +1,1 @@
+{:output-dir "out", :closure-defines #:cljs.core{*global* "window"}, :verbose true, :aot-cache true, :output-to "out/index.js", :bundle-cmd {:none ["npx" "webpack" "./out/index.js" "-o" "out" "--mode=development"], :default ["npx" "webpack" "./out/index.js" "-o" "out"]}, :browser-repl true, :target :bundle, :main the-longtime-game.web}
