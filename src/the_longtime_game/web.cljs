@@ -612,22 +612,10 @@
    [:div.control
     [prompt-int value amount]]])
 
-(defn- handle-leave-behind []
-  (let [leftovers (get-in @herd [:stores :food] 0)
-        herd* (assoc-in @herd [:stores :food] 0)
-        location (core/current-location herd*)
-        location
-        (if (core/local-infra? herd* :granary)
-          (update-in location [:stores :food] + leftovers)
-          location)
-        herd* (core/assoc-location herd* location)
-        stores (->> (:stores herd*)
-                    seq
-                    (filter (comp pos-int? second))
-                    (map #(conj % (r/atom (second %)))))
-        carry-limit (core/carry-limit herd*)
+(defn- render-leave-heind [herd* stores]
+  (let [carry-limit (core/carry-limit herd*)
         carrying (into {} (for [[resource _ value] stores]
-                                 [resource (int @value)]))
+                            [resource (int @value)]))
         disabled? (< carry-limit (reduce + 0 (vals carrying)))]
     [:div.box>div.content
      [:h3 "Leave things behind?"]
@@ -646,6 +634,20 @@
                       (reset! monthstep :next))
        :disabled disabled?}
       "Carry this!"]]))
+
+(defn- handle-leave-behind []
+  (let [leftovers (get-in @herd [:stores :food] 0)
+        herd* (assoc-in @herd [:stores :food] 0)
+        location (core/current-location herd*)
+        location
+        (if (core/local-infra? herd* :granary)
+          (update-in location [:stores :food] + leftovers)
+          location)
+        herd* (core/assoc-location herd* location)
+        stores (->> (seq (:stores herd*))
+                    (filter (comp pos-int? second))
+                    (map #(conj % (r/atom (second %)))))]
+    [render-leave-heind herd* stores]))
 
 (defn- handle-next-location []
   [:div.box>div.content
