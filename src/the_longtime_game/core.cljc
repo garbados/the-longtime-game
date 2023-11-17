@@ -55,7 +55,7 @@
 (def early-contacts #{:auter
                       :harp
                       :felidar
-                      :er-sol})
+                      :er'sol})
 
 (def mid-contacts #{:dod
                     :saurek})

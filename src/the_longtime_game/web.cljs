@@ -314,11 +314,15 @@
            [:tr
             (for [[resource amount] stores*]
               ^{:key resource} [:td amount])]]])]
+      (when-let [contacts (seq (:contacts herd*))]
+        [:li [:p (str "Contacts: " (string/join ", " (map text/normalize-name contacts)))]])
+      (when-let [space (seq (:space herd*))]
+        [:li [:p (str "Space: " (string/join ", " (map text/normalize-name space)))]])
       [print-location (core/current-location herd*)]
       [:li
        [:span "Next Stage:"
         [:ul
-         (for [location (sort-by :name (second path))]
+         (for [location (second path)]
            ^{:key (:terrain location)} [print-location-brief location])]]]]]))
 
 (defn- intro []
@@ -485,7 +489,9 @@
          [:p   (str (count new-dead) " " verb " returned to soil: "
                     (string/join ", " (map :name new-dead)))]))
      (when event
-       [:p ((second event))])
+       [:<>
+        [:h5 (-> event first text/normalize-name)]
+        [:p ((second event))]])
      [:button.button.is-fullwidth.is-primary
       {:on-click #(do (reset! herd herd*)
                       (reset! monthstep :projects))}
@@ -519,7 +525,7 @@
     (if @extra?
       [:div.box>div.content
        [:h3 (str "Select what to dismantle:")]
-       (for [infra (:infra (core/current-location herd))]
+       (for [infra (:infra (core/current-location herd*))]
          ^{:key infra}
          [:p
           [:button.button.is-info.is-fullwidth
