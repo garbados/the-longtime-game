@@ -5,7 +5,8 @@
             [the-longtime-game.building :as building]
             [the-longtime-game.core :as core]
             [the-longtime-game.select :as select]
-            [the-longtime-game.space-text :as space-text]))
+            [the-longtime-game.space-text :as space-text]
+            [the-longtime-game.text :as text]))
 
 (def base-need 50)
 (def low-need 10)
@@ -40,7 +41,7 @@
   (for [[name*
          {:keys [description detail uses filter filter-fn text-fn]}]
         building/building->info]
-    (cond-> {:name (str "Construct " (building/building->name name*))
+    (cond-> {:name (str "Construct " (text/normalize-name name*))
              :description description
              :detail detail
              :uses (cond
@@ -228,7 +229,7 @@
      :filter-fn flora-filter
      :effect
      (gather-factory base-need [[:wood 1]
-                                [:bone 1/2]]
+                                [:bone 0.5]]
                      :bonus-fn flora-bonus)
      :location-effect deplete-land}
     {:name "Gather stones"
@@ -237,12 +238,12 @@
      :uses [:geology]
      :effect
      (gather-factory base-need [[:stone 1]
-                                [:ore 1/10]]
+                                [:ore 0.1]]
                      :infra :quarry
                      :bonus-fn
                      (fn [herd]
                        (if (= :mountain (:terrain (core/current-location herd)))
-                         3/2
+                         1.5
                          1)))}
     {:name "Graze"
      :description "Feed from the land as you have since time immemorial."
@@ -253,7 +254,7 @@
                      :bonus-fn
                      (fn [herd]
                        (if (= 3 (core/get-season herd))
-                         1/2
+                         0.5
                          1)))}
     {:name "Harvest crops"
      :description "Gather plenty of food from ripe plants."
@@ -289,12 +290,12 @@
      :description "Surprise and tantalize with feats of physical prowess and dextrous excellence!"
      :detail "Consumes 1 nutrition per 5 individuals, and raises fulfillment."
      :uses [:athletics :organizing]
-     :filter {:stores {:nutrition 1/5}}
+     :filter {:stores {:nutrition 0.2}}
      :filter-fn
-     #(core/herd-has-nutrition? % 1/5)
+     #(core/herd-has-nutrition? % 0.2)
      :effect
      #(-> ((fulfillment-factory 3 :infra :stadium) %1 %2)
-          (core/consume-nutrition 1/5))}
+          (core/consume-nutrition 0.2))}
     {:name "Launch probe"
      :description "Place a sensor-bearing craft on a journey throughout the local system."
      :detail "Raises fulfillment, besides!"
@@ -391,7 +392,7 @@
      :uses [:medicine]
      :filter {:stores {:food base-need}}
      :effect
-     (gather-factory base-need [[:poultices 1/2]]
+     (gather-factory base-need [[:poultices 0.5]]
                      :infra :hospital)}
     {:name "Smelt metal"
      :description "Use the massive force of monsoon winds to heat charcoal hot enough to make high-quality steel."
@@ -401,7 +402,7 @@
               :stores {:wood base-need :ore base-need}
               :infra :wind-forge}
      :effect
-     (gather-factory base-need [[:metal 1/2]]
+     (gather-factory base-need [[:metal 0.5]]
                      :infra :monsoon-bellows)}
     {:name "Spelunk"
      :description "Delve the dimdark for shinies."
@@ -474,9 +475,9 @@
      :description "Devote the herd to the development of its own abilities."
      :detail "Raises skills, prioritizing passions."
      :uses [:organizing]
-     :filter {:stores {:tools 1/10
-                       :wood 1/10
-                       :rations 1/10}}
+     :filter {:stores {:tools 0.1
+                       :wood 0.1
+                       :rations 0.1}}
      :effect
      (fn [herd _]
        (core/update-individuals herd (partial core/inc-passion-skill herd)))}

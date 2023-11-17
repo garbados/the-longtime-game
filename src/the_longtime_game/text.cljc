@@ -7,7 +7,9 @@
 (defn normalize-name
   [x]
   (cond
-    (keyword? x)     (name x)
+    (keyword? x)     (->> (string/split (name x) #"-")
+                          (map string/capitalize)
+                          (string/join " "))
     (and (number? x)
          (< 0 x 1))  (str (int (* 100 (float x))) "%")
     (string? x)      x

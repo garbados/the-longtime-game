@@ -12,7 +12,7 @@
    :text-fn event-text/crossed-paths
    :marshal-fn
    (fn [_ herd & _]
-     (let [n (int (* 1/8 (count (:individuals herd))))]
+     (let [n (int (* (/ 1 8) (count (:individuals herd))))]
        (reduce
         (fn [all resource]
           (assoc all resource (rand-int n)))
@@ -107,12 +107,12 @@
    :marshal-fn
    (fn [herd & _]
      (let [population (count (:individuals herd))]
-       (and (core/herd-has-resource? herd :poultices (* 1/3 population))
-            (core/herd-has-skill? herd :medicine (* 1/4 population)))))
+       (and (core/herd-has-resource? herd :poultices (* (/ 1 3) population))
+            (core/herd-has-skill? herd :medicine (* (/ 1 4) population)))))
    :effect
    (fn [herd [individual] passed?]
      (if passed?
-       (update-in herd [:stores :poultices] (comp int *) 2/3)
+       (update-in herd [:stores :poultices] (comp int *) (/ 2 3))
        (core/perish herd individual)))})
 
 (def ration-rot
@@ -125,8 +125,8 @@
    :effect
    (fn [herd _ sanitarian]
      (if sanitarian
-       (update-in herd [:stores :rations] (comp int *) 2/3)
-       (-> (update-in herd [:stores :rations] (comp int *) 1/2)
+       (update-in herd [:stores :rations] (comp int *) (/ 2 3))
+       (-> (update-in herd [:stores :rations] (comp int *) (/ 1 2))
            (core/update-individuals core/inc-fulfillment -5))))})
 
 (def wound-healed

@@ -64,7 +64,7 @@
     Aye, the dream blossoms: to dance together on the world,
     to thrive together among the stars!"))
 
-(def er-sol-contact
+(def er'sol-contact
   (text/join-text
    "The trees have always been alive, of course,
     since long before any mammal or avian or reptile walked the land.
@@ -157,7 +157,7 @@
   {:auter auter-contact
    :felidar felidar-contact
    :harp harp-contact
-   :er-sol er-sol-contact
+   :er'sol er'sol-contact
    :dod dod-contact
    :saurek saurek-contact
    :haroot haroot-contact

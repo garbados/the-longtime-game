@@ -1,6 +1,5 @@
 (ns the-longtime-game.building 
   (:require [clojure.spec.alpha :as s]
-            [clojure.string :as string]
             [the-longtime-game.core :as core]
             [the-longtime-game.select :as select]))
 
@@ -55,7 +54,7 @@
      {:skills {:herbalism 200 :craftwork 200}
       :stores {:wood 300 :rations 150 :poultices 100}
       :terrain :forest
-      :contacts :er-sol}}
+      :contacts :er'sol}}
     {:name :flyer-market
      :description "A market for birds and friends of birds."
      :detail "Exchange resources in an orchestrated hierarchy."
@@ -190,13 +189,3 @@
      :filter
      {:stores {:wood 10 :stone 10 :tools 10}
       :skills {:craftwork 20}}}]))
-
-(defn building->name
-  [building]
-  (->> (string/split (name building) #"-")
-       (map string/capitalize)
-       (string/join " ")))
-
-(s/fdef building->name
-  :args (s/cat :building ::core/building)
-  :ret string?)
