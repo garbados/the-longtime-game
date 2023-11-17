@@ -30,6 +30,8 @@ jobs:
         uses: dcodeIO/setup-node-nvm@master
         with:
           node-version: lts/* 
+
+      - run: npm i
           
       # Optional step:
       - name: Cache clojure dependencies
