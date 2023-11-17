@@ -43,8 +43,16 @@
            (reset! games (vec (map #(.-id %) (.-rows rows)))))))
 
 (defn- save-doc [id value]
-  (.put db (js-obj "_id" id
-                   "value" (pr-str value))))
+  (.catch (.put db (js-obj "_id" id
+                           "value" (pr-str value)))
+          #(.then (.get db id)
+                  (fn [doc]
+                    (let [doc* (-> doc
+                                   js->clj
+                                   (assoc :value (pr-str value))
+                                   clj->js)]
+                      (.log js/console doc*)
+                      (.put db doc*))))))
 
 (defn- fetch-doc [id]
   (.then (.get db id)
@@ -447,6 +455,23 @@
      [:p remarks]
      (when event
        [:p ((second event))])
+     (when-let [new-adults (seq (:new-adults herd*))]
+       (let [plural? (< 1 (count new-adults))
+             verb (if plural?
+                    "minots have"
+                    "minot has")
+             s? (if plural?
+                  "s"
+                  "")]
+         [:p (str (count new-adults) " " verb " come in from their journey" s? ": "
+                  (string/join ", " (map :name new-adults)))]))
+     (when-let [new-dead (seq (:new-dead herd*))]
+       (let [plural? (> 1 (count new-dead))
+             verb (if plural?
+                    "minots have"
+                    "minot has")]
+         [:p   (str (count new-dead) " " verb " returned to soil: "
+                  (string/join ", " (map :name new-dead)))]))
      (if steppe?
        [:div
         [:p "The herd rushes unfettered across the steppe."]
@@ -544,30 +569,39 @@
                 (when-let [candidate (core/select-candidate (:syndicates herd*) candidates)]
                   (swap! herd update :syndicates conj candidate)
                   (meta-text/announce-syndicate candidate))))])]
-      (if (seq announcements)
-        [:div.box>div.content
-         [:h3 "End of the month"]
-         (for [i (range (count announcements))
-               :let [announcement (nth announcements i)]]
-           ^{:key i}
-           [:p announcement])
-         [:button.button.is-primary.is-fullwidth
-          {:on-click #(reset! monthstep :leave)}
-          "Select your next location"]]
-        (reset! monthstep :leave)))))
+      (when (empty? announcements)
+        (reset! monthstep :leave))
+      [:div.box>div.content
+       [:h3 "End of the month"]
+       (for [i (range (count announcements))
+             :let [announcement (nth announcements i)]]
+         ^{:key i}
+         [:p announcement])
+       [:button.button.is-primary.is-fullwidth
+        {:on-click #(reset! monthstep :leave)}
+        "Proceed to leaving behind resources"]]
+      )))
 
 (defn- handle-leave-behind []
-  (let [stores (->> (:stores @herd)
+  (let [leftovers (get-in herd [:stores :food] 0)
+        herd* (assoc-in @herd [:stores :food] 0)
+        location (core/current-location herd*)
+        location
+        (if (core/local-infra? herd* :granary)
+          (update-in location [:stores :food] + leftovers)
+          location)
+        herd* (core/assoc-location herd* location)
+        stores (->> (:stores herd*)
                     seq
                     (filter (comp pos-int? second))
                     (map #(conj % (r/atom (second %)))))
-        carry-limit (core/carry-limit @herd)
+        carry-limit (core/carry-limit herd*)
         get-carrying #(into {} (for [[resource _ value] stores]
                                  [resource @value]))]
     [:div.box>div.content
      [:h3 "Leave things behind?"]
      [:p (str "Can carry up to " carry-limit " goods.")]
-     (when (core/must-leave-some? @herd)
+     (when (core/must-leave-some? herd*)
        (let [total (reduce + 0 (map second stores))
              too-many (- total carry-limit)]
          [:p [:em (str "Carrying " total ". " too-many "too many!")]]))
@@ -593,8 +627,8 @@
         [:button.button.is-info.is-fullwidth
          {:on-click #(do (swap! herd core/next-location i)
                          (swap! herd core/end-month)
-                         (save-game)
-                         (reset! monthstep :event))}
+                         (.then (save-game)
+                                (fn [& _] (reset! monthstep :event))))}
          (:name location)]]))])
 
 (defn- playing []
