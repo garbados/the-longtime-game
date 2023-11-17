@@ -1,6 +1,9 @@
 name: Deploy to GitHub Pages
 
-on: [workflow_dispatch]
+on:
+  push:
+    branches:
+      - main
 
 # on:
 #   push:
@@ -47,8 +50,11 @@ jobs:
           restore-keys: cljdeps-
       
       - run: ./build-web.sh
+      - run: mkdir www
+      - run: mv out www/out
+      - run: mv index.html www/index.html
+
       - name: Deploy
-        uses: peaceiris/actions-gh-pages@v3
+        uses: JamesIves/github-pages-deploy-action@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: .
+          folder: www
