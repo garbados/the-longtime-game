@@ -241,7 +241,7 @@
                  (string/join
                   ", "
                   (for [[resource amount] (sort-by first stores)]
-                    (str (name resource) ": " amount)))))])]
+                    (str amount " " (text/normalize-name resource))))))])]
     [:li
      [:span (str "Location: " (:name location))]
      [:ul
@@ -548,16 +548,18 @@
        [:p [:strong "How do you counsel?"]]
        (for [option options]
          ^{:key option}
-         [:button.button.is-fullwidth.is-primary.is-light
-          {:on-click #(reset! choice option)}
-          (text/normalize-name option)]))
+         [:p
+          [:button.button.is-fullwidth.is-primary.is-light
+           {:on-click #(reset! choice option)}
+           (text/normalize-name option)]]))
      (when (or (some? @choice) (nil? (seq options)))
        (when-let [post-blurb (post-text-fn @choice)]
          [:p post-blurb])
-       [:button.button.is-fullwidth.is-primary
-        {:on-click #(do (reset! herd (effect))
-                        (reset! monthstep :upkeep))}
-        "The dreamer returns to their rest..."])]))
+       [:p
+        [:button.button.is-fullwidth.is-primary
+         {:on-click #(do (reset! herd (effect))
+                         (reset! monthstep :upkeep))}
+         "The dreamer returns to their rest..."]])]))
 
 (defn- handle-dream []
   (when (nil? @dream)
