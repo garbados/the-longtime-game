@@ -432,7 +432,8 @@
   (let [herd*    (core/begin-month @herd)
         location (core/current-location herd*)
         steppe?  (= :steppe (:terrain location))
-        event    (when (zero? (rand-int 3))
+        event    (when (and (not steppe?)
+                            (zero? (rand-int 3)))
                    (event/pick-event herd*))
         herd*    (if-let [[name _text-fn effect] event]
                    (assoc (effect) :event name)
@@ -446,10 +447,17 @@
      [:p remarks]
      (when event
        [:p ((second event))])
-     [:button.button.is-fullwidth.is-primary
-      {:on-click #(do (reset! herd herd*)
-                      (reset! monthstep :projects))}
-      "Proceed to select projects"]]))
+     (if steppe?
+       [:div
+        [:p "The herd rushes unfettered across the steppe."]
+        [:button.button.is-fullwidth.is-primary
+         {:on-click #(do (reset! herd herd*)
+                         (reset! monthstep :next))}
+         "Proceed to select next location"]]
+       [:button.button.is-fullwidth.is-primary
+        {:on-click #(do (reset! herd herd*)
+                        (reset! monthstep :projects))}
+        "Proceed to select projects"])]))
 
 (defn- enact-project [proj]
   (if (= (:name proj) (:name dismantle-infra))
@@ -522,51 +530,57 @@
      [:button.button.is-primary.is-fullwidth
       {:on-click #(delete-game @game)}
       "Try again!"]]
-    (let [herd* @herd]
-      [:div.box>div.content
-       [:h3 "End of the month"]
-       (when-let [contact (and (core/new-contact? herd*)
-                               (core/get-next-contact herd*))]
-         (swap! herd update :contacts conj contact)
-         [:p (contact-text/contact->blurb contact)])
-       (when (core/should-add-syndicate? herd*)
-         (let [votes (core/tally-votes (:individuals herd*))
-               candidates (core/rank-candidates votes)]
-           (when-let [candidate (core/select-candidate (:syndicates herd*) candidates)]
-             (swap! herd update :syndicates conj candidate)
-             [:p (meta-text/announce-syndicate candidate)])))
-       [:button.button.is-primary.is-fullwidth
-        {:on-click #(reset! monthstep :leave)}
-        "Select your next location"]])))
+    (let [herd* @herd
+          announcements
+          (filter
+           some?
+           [(when-let [contact (and (core/new-contact? herd*)
+                                    (core/get-next-contact herd*))]
+              (swap! herd update :contacts conj contact)
+              (contact-text/contact->blurb contact))
+            (when (core/should-add-syndicate? herd*)
+              (let [votes (core/tally-votes (:individuals herd*))
+                    candidates (core/rank-candidates votes)]
+                (when-let [candidate (core/select-candidate (:syndicates herd*) candidates)]
+                  (swap! herd update :syndicates conj candidate)
+                  (meta-text/announce-syndicate candidate))))])]
+      (if (seq announcements)
+        [:div.box>div.content
+         [:h3 "End of the month"]
+         (for [i (range (count announcements))
+               :let [announcement (nth announcements i)]]
+           ^{:key i}
+           [:p announcement])
+         [:button.button.is-primary.is-fullwidth
+          {:on-click #(reset! monthstep :leave)}
+          "Select your next location"]]
+        (reset! monthstep :leave)))))
 
 (defn- handle-leave-behind []
   (let [stores (->> (:stores @herd)
                     seq
                     (filter (comp pos-int? second))
                     (map #(conj % (r/atom (second %)))))
-        disabled? (> (reduce + (map #(deref (nth % 2)) stores))
-                     (core/carry-limit @herd))
+        carry-limit (core/carry-limit @herd)
         get-carrying #(into {} (for [[resource _ value] stores]
-                                 [resource @value]))
-        finish #(do (swap! herd core/keep-and-leave-behind (get-carrying))
-                    (reset! monthstep :next))]
+                                 [resource @value]))]
     [:div.box>div.content
      [:h3 "Leave things behind?"]
+     [:p (str "Can carry up to " carry-limit " goods.")]
+     (when (core/must-leave-some? @herd)
+       (let [total (reduce + 0 (map second stores))
+             too-many (- total carry-limit)]
+         [:p [:em (str "Carrying " total ". " too-many "too many!")]]))
      (for [[resource amount value] stores]
        ^{:key resource}
        [:div.field
         [:label.label (text/normalize-name resource)]
         [:div.control
          [prompt-int value amount]]])
-     (if (core/must-leave-some? @herd)
-       [:button.button.is-info.is-fullwidth
-        {:on-click finish
-         :disabled disabled?}
-        "Carry this!"]
-       [:button.button.is-info.is-fullwidth
-        {:on-click finish
-         :disabled disabled?}
-        "Carry everything!"])]))
+     [:button.button.is-info.is-fullwidth
+      {:on-click #(do (swap! herd core/keep-and-leave-behind (get-carrying))
+                      (reset! monthstep :next))}
+      "Carry this!"]]))
 
 (defn- handle-next-location []
   [:div.box>div.content
@@ -579,6 +593,7 @@
         [:button.button.is-info.is-fullwidth
          {:on-click #(do (swap! herd core/next-location i)
                          (swap! herd core/end-month)
+                         (save-game)
                          (reset! monthstep :event))}
          (:name location)]]))])
 
