@@ -559,13 +559,14 @@
            {:on-click #(reset! choice option)}
            (text/normalize-name option)]]))
      (when (or (some? @choice) (nil? (seq options)))
-       (when-let [post-blurb (post-text-fn @choice)]
-         [:p post-blurb])
-       [:p
-        [:button.button.is-fullwidth.is-primary
-         {:on-click #(do (reset! herd (effect))
-                         (reset! monthstep :upkeep))}
-         "The dreamer returns to their rest..."]])]))
+       [:<>
+        (when-let [post-blurb (post-text-fn @choice)]
+          [:p post-blurb])
+        [:p
+         [:button.button.is-fullwidth.is-primary
+          {:on-click #(do (reset! herd (effect @choice))
+                          (reset! monthstep :upkeep))}
+          "The dreamer returns to their rest..."]]])]))
 
 (defn- handle-dream []
   (when (nil? @dream)
@@ -594,21 +595,25 @@
            [(when-let [contact (and (core/new-contact? herd*)
                                     (core/get-next-contact herd*))]
               (swap! herd update :contacts conj contact)
-              (contact-text/contact->blurb contact))
+              [(str "A new People has made contact!")
+               (contact-text/contact->blurb contact)])
             (when (core/should-add-syndicate? herd*)
               (let [votes (core/tally-votes (:individuals herd*))
                     candidates (core/rank-candidates votes)]
                 (when-let [candidate (core/select-candidate (:syndicates herd*) candidates)]
                   (swap! herd update :syndicates conj candidate)
-                  (meta-text/announce-syndicate candidate))))])]
+                  ["A new syndicate organizes!"
+                   (meta-text/announce-syndicate candidate)])))])]
       (when (empty? announcements)
         (reset! monthstep :leave))
       [:div.box>div.content
        [:h3 "End of the month"]
        (for [i (range (count announcements))
-             :let [announcement (nth announcements i)]]
+             :let [[title announcement] (nth announcements i)]]
          ^{:key i}
-         [:p announcement])
+         [:<>
+          [:h5 title]
+          [:p announcement]])
        [:button.button.is-primary.is-fullwidth
         {:on-click #(reset! monthstep :leave)}
         "Proceed to leaving behind resources"]]
