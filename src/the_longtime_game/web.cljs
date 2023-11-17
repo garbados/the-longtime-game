@@ -21,6 +21,7 @@
 (defonce herd (r/atom nil))
 (defonce gamestate (r/atom :intro))
 (defonce monthstep (r/atom :event))
+(defonce dream (r/atom nil))
 (defonce extra? (r/atom false))
 (defonce extrachoice (r/atom nil))
 
@@ -51,7 +52,6 @@
                                    js->clj
                                    (assoc :value (pr-str value))
                                    clj->js)]
-                      (.log js/console doc*)
                       (.put db doc*))))))
 
 (defn- fetch-doc [id]
@@ -157,8 +157,11 @@
 (defn- credits []
   [:div.container>div.box>div.content
    [:h3 "Credits"]
-   (for [line (string/split-lines meta-text/credits-description)]
-     [:p line])])
+   (let [lines (string/split-lines meta-text/credits-description)]
+     (for [i (range (count lines))
+           :let [line (nth lines i)]]
+       ^{:key i}
+       [:p line]))])
 
 (defn- navbar []
   [:div.level
@@ -181,14 +184,13 @@
                         (reset! gamestate :playing))}
         "Play Game"]])
     (when (some? @herd)
-      (for [state* [:intro :projects :individuals :path]
-            :let [name* (-> state* name string/capitalize)]]
+      (for [state* [:intro :projects :individuals :path]]
         ^{:key state*}
         [:div.level-item
          [:button.button.is-info
           {:on-click #(do (reset! state :playing)
                           (reset! gamestate state*))}
-          name*]]))]
+          (text/normalize-name state*)]]))]
    [:div.level-right
     [:div.level-item
      [:button.button.is-info.is-light
@@ -223,24 +225,29 @@
                   (map (fn [nutrient]
                          (string/join
                           " "
-                          [(-> nutrient
-                               name
-                               string/capitalize)
+                          [(text/normalize-name nutrient)
                            (get location nutrient)]))
                        [:n :k :p]))))
           (when (some? (:crop location))
-            (str "Crop: " (name (:crop location))))
+            (str "Crop: " (text/normalize-name (:crop location))))
           (when (some? (:ready? location))
             (str "Ready? " (:ready? location)))
           (when (some? (:wild? location))
             (str "Wild? " (:wild? location)))
           (when-let [infra (seq (:infra location))]
-            (str "Infra: " (string/join ", " (sort (map text/normalize-name infra)))))])]
+            (str "Infra: " (string/join ", " (sort (map text/normalize-name infra)))))
+          (when-let [stores (seq (filter (comp pos-int? second) (:stores location)))]
+            (str "Stores: "
+                 (string/join
+                  ", "
+                  (for [[resource amount] (sort-by first stores)]
+                    (str (name resource) ": " amount)))))])]
     [:li
      [:span (str "Location: " (:name location))]
      [:ul
-      (for [s strings]
-        ^{:key s} [:li s])]]))
+      (for [i (range (count strings))
+            :let [s (nth strings i)]]
+        ^{:key i} [:li s])]]))
 
 (defn- print-location-brief [location]
   (let [infra (seq (map text/normalize-name (:infra location)))]
@@ -378,7 +385,7 @@
        [:span (:description project)]
        [:em (str " " (:detail project))]]
       (when-let [uses (seq (:uses project))]
-        [:p (str "Uses " (string/join ", " (map name uses)) ".")])
+        [:p (str "Uses " (string/join ", " (map text/normalize-name uses)) ".")])
       (when-let [filter* (:filter project)]
         [explain-filter filter*])])])
 
@@ -436,25 +443,30 @@
            ^{:key (:terrain location)}
            (print-location location))]]))])
 
-(defn- handle-event []
-  (let [herd*    (core/begin-month @herd)
-        location (core/current-location herd*)
-        steppe?  (= :steppe (:terrain location))
-        event    (when (and (not steppe?)
-                            (zero? (rand-int 3)))
-                   (event/pick-event herd*))
-        herd*    (if-let [[name _text-fn effect] event]
-                   (assoc (effect) :event name)
-                   herd*)
-        remarks  (if steppe?
-                   (remark/gen-remarks herd*)
-                   (string/join " " [(remark/gen-remarks herd*)
-                                     (moment/gen-moments herd*)]))]
+(defn- handle-steppe [herd* location]
+  (let [remarks (remark/gen-remarks herd*)]
     [:div.box>div.content
      [:h3 "Entering " (:name location) "..."]
      [:p remarks]
-     (when event
-       [:p ((second event))])
+     [:div
+      [:p "The herd rushes unfettered across the steppe."]
+      [:button.button.is-fullwidth.is-primary
+       {:on-click #(do (reset! herd herd*)
+                       (reset! monthstep :next))}
+       "Proceed to select next location"]]]))
+
+(defn- handle-new-month [herd* location]
+  (let [herd* (-> herd* core/begin-month core/consolidate-stores)
+        event (when (zero? (rand-int 3))
+                (event/pick-event herd*))
+        herd* (if-let [[name* _text-fn effect] event]
+                (assoc (effect) :event name*)
+                herd*)
+        remarks (string/join " " [(remark/gen-remarks herd*)
+                                  (moment/gen-moments herd*)])]
+    [:div.box>div.content
+     [:h3 "Entering " (:name location) "..."]
+     [:p remarks]
      (when-let [new-adults (seq (:new-adults herd*))]
        (let [plural? (< 1 (count new-adults))
              verb (if plural?
@@ -471,24 +483,29 @@
                     "minots have"
                     "minot has")]
          [:p   (str (count new-dead) " " verb " returned to soil: "
-                  (string/join ", " (map :name new-dead)))]))
-     (if steppe?
-       [:div
-        [:p "The herd rushes unfettered across the steppe."]
-        [:button.button.is-fullwidth.is-primary
-         {:on-click #(do (reset! herd herd*)
-                         (reset! monthstep :next))}
-         "Proceed to select next location"]]
-       [:button.button.is-fullwidth.is-primary
-        {:on-click #(do (reset! herd herd*)
-                        (reset! monthstep :projects))}
-        "Proceed to select projects"])]))
+                    (string/join ", " (map :name new-dead)))]))
+     (when event
+       [:p ((second event))])
+     [:button.button.is-fullwidth.is-primary
+      {:on-click #(do (reset! herd herd*)
+                      (reset! monthstep :projects))}
+      "Proceed to select projects"]]))
+
+(defn- handle-event []
+  (save-game)
+  (reset! dream nil)
+  (let [herd*    @herd
+        location (core/current-location herd*)
+        steppe?  (= :steppe (:terrain location))]
+    (if steppe?
+      [handle-steppe herd* location]
+      [handle-new-month herd* location])))
 
 (defn- enact-project [proj]
   (if (= (:name proj) (:name dismantle-infra))
     (reset! extra? true)
     (let [herd* (-> (project/do-project @herd proj)
-                    (update :projects conj name))]
+                    (update :projects conj (:name proj)))]
       (reset! herd herd*)
       (when (= 3 (count (:projects herd*)))
         (reset! monthstep :dream)))))
@@ -520,31 +537,38 @@
            {:on-click #(enact-project proj)}
            name]])])))
 
-(defn- handle-dream [choice]
-  (if-let [dream (and (zero? (rand-int 3))
-                      (dream/pick-dream @herd))]
-    (let [[options text-fn post-text-fn effect]
-          (dream/marshal-dream @herd dream)
-          blurb (text-fn)]
-      [:div.box>div.content
-       [:h3 "A dreamer visits you..."]
-       [:p blurb]
-       (when (and (nil? @choice)
-                  (seq options))
-         [:p [:strong "How do you counsel?"]]
-         (for [option options]
-           ^{:key option}
-           [:button.button.is-fullwidth.is-primary.is-light
-            {:on-click #(reset! choice option)}
-            (text/normalize-name option)]))
-       (when (or (some? @choice) (nil? (seq options)))
-         (when-let [post-blurb (post-text-fn @choice)]
-           [:p post-blurb])
-         [:button.button.is-fullwidth.is-primary
-          {:on-click #(do (reset! herd (effect))
-                          (reset! monthstep :upkeep))}
-          "The dreamer returns to their rest..."])])
-    (reset! monthstep :upkeep)))
+(defn- handle-specific-dream [choice]
+  (let [[options text-fn post-text-fn effect] @dream
+        blurb (text-fn)]
+    [:div.box>div.content
+     [:h3 "A dreamer visits you..."]
+     [:p blurb]
+     (when (and (nil? @choice)
+                (seq options))
+       [:p [:strong "How do you counsel?"]]
+       (for [option options]
+         ^{:key option}
+         [:button.button.is-fullwidth.is-primary.is-light
+          {:on-click #(reset! choice option)}
+          (text/normalize-name option)]))
+     (when (or (some? @choice) (nil? (seq options)))
+       (when-let [post-blurb (post-text-fn @choice)]
+         [:p post-blurb])
+       [:button.button.is-fullwidth.is-primary
+        {:on-click #(do (reset! herd (effect))
+                        (reset! monthstep :upkeep))}
+        "The dreamer returns to their rest..."])]))
+
+(defn- handle-dream []
+  (when (nil? @dream)
+    (when (zero? (rand-int 3))
+      (when-let [dream* (dream/pick-dream @herd)]
+        (reset! dream (dream/marshal-dream @herd dream*)))))
+  (if (some? @dream)
+    [handle-specific-dream (r/atom nil)]
+    (do
+      (reset! monthstep :upkeep)
+      [:p "Loading..."])))
 
 (defn- handle-upkeep []
   (swap! herd core/apply-herd-upkeep)
@@ -582,8 +606,14 @@
         "Proceed to leaving behind resources"]]
       )))
 
+(defn- prompt-leave-behind [resource amount value]
+  [:div.field
+   [:label.label (text/normalize-name resource)]
+   [:div.control
+    [prompt-int value amount]]])
+
 (defn- handle-leave-behind []
-  (let [leftovers (get-in herd [:stores :food] 0)
+  (let [leftovers (get-in @herd [:stores :food] 0)
         herd* (assoc-in @herd [:stores :food] 0)
         location (core/current-location herd*)
         location
@@ -596,46 +626,47 @@
                     (filter (comp pos-int? second))
                     (map #(conj % (r/atom (second %)))))
         carry-limit (core/carry-limit herd*)
-        get-carrying #(into {} (for [[resource _ value] stores]
-                                 [resource @value]))]
+        carrying (into {} (for [[resource _ value] stores]
+                                 [resource (int @value)]))
+        disabled? (< carry-limit (reduce + 0 (vals carrying)))]
     [:div.box>div.content
      [:h3 "Leave things behind?"]
      [:p (str "Can carry up to " carry-limit " goods.")]
      (when (core/must-leave-some? herd*)
        (let [total (reduce + 0 (map second stores))
              too-many (- total carry-limit)]
-         [:p [:em (str "Carrying " total ". " too-many "too many!")]]))
-     (for [[resource amount value] stores]
-       ^{:key resource}
-       [:div.field
-        [:label.label (text/normalize-name resource)]
-        [:div.control
-         [prompt-int value amount]]])
+         [:p [:em (str "Carrying " total ". " too-many " too many!")]]))
+     (doall
+      (for [[resource amount value] stores]
+        ^{:key resource}
+        [prompt-leave-behind resource amount value]))
      [:button.button.is-info.is-fullwidth
-      {:on-click #(do (swap! herd core/keep-and-leave-behind (get-carrying))
-                      (reset! monthstep :next))}
+      {:on-click #(do (reset! herd herd*)
+                      (swap! herd core/keep-and-leave-behind carrying)
+                      (reset! monthstep :next))
+       :disabled disabled?}
       "Carry this!"]]))
 
 (defn- handle-next-location []
   [:div.box>div.content
    [:h3 "Choose your next location"]
    (let [stage (second (:path @herd))]
-     (for [i (range (count stage))
-           :let [location (get-in @herd [:path 1 i])]]
-       ^{:key i}
-       [:p
-        [:button.button.is-info.is-fullwidth
-         {:on-click #(do (swap! herd core/next-location i)
-                         (swap! herd core/end-month)
-                         (.then (save-game)
-                                (fn [& _] (reset! monthstep :event))))}
-         (:name location)]]))])
+     (doall
+      (for [i (range (count stage))
+            :let [location (get-in @herd [:path 1 i])]]
+        ^{:key i}
+        [:p
+         [:button.button.is-info.is-fullwidth
+          {:on-click #(do (swap! herd core/next-location i)
+                          (swap! herd core/end-month)
+                          (reset! monthstep :event))}
+          (:name location)]])))])
 
 (defn- playing []
   (case @monthstep
     :event    [handle-event]
     :projects [handle-projects]
-    :dream    [handle-dream (r/atom nil)]
+    :dream    [handle-dream]
     :upkeep   [handle-upkeep]
     :leave    [handle-leave-behind]
     :next     [handle-next-location]))
