@@ -263,10 +263,10 @@
      [:h3 (:name herd*)]
      [:h5 (str "Shepherded by the " spirit)]
      [:ul
-      [:li (let [month (inc (rem month 12))
-                 year (inc (int (/ month 12)))
+      [:li (let [year (inc (int (/ month 12)))
+                 month* (inc (rem month 12))
                  season (core/int->season (core/get-season herd*))]
-             (str "Year " year ", month " month " (" season ")"))]
+             (str "Year " year ", month " month* " (" season ")"))]
       [:li (str "Population: " population)]
       [:li (str "Syndicates: " (string/join ", " (sort (map core/syndicate-name syndicates))))]
       [:li (let [need (core/calc-food-need population)
