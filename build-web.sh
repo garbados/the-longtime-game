@@ -1,1 +1,1 @@
-clj -M -m cljs.main -co build.edn -v -c
+clojure -M -m cljs.main -co build.edn -v -c
