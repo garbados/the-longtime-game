@@ -665,7 +665,9 @@
 (defn- handle-next-location []
   [:div.box>div.content
    [:h3 "Choose your next location"]
-   (let [stage (second (:path @herd))]
+   (let [location (core/current-location @herd)
+         steppe? (= :steppe (:terrain location))
+         stage (second (:path @herd))]
      (doall
       (for [i (range (count stage))
             :let [location (get-in @herd [:path 1 i])]]
@@ -673,7 +675,8 @@
         [:p
          [:button.button.is-info.is-fullwidth
           {:on-click #(do (swap! herd core/next-location i)
-                          (swap! herd core/end-month)
+                          (when-not steppe?
+                            (swap! herd core/end-month))
                           (reset! monthstep :event))}
           (:name location)]])))])
 
