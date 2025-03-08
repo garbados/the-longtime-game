@@ -1154,10 +1154,6 @@
         (map-locations inc-atomic-reactors)
         update-power)))
 
-(s/fdef inc-month
-  :args (s/cat :herd ::herd)
-  :ret ::herd)
-
 (defn gains-experience?
   [{:keys [syndicates] :as herd} used {:keys [passions skills]}]
   (let [used* (filter #(> max-skill (get skills %)) used)

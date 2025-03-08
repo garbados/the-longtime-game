@@ -27,7 +27,7 @@
   },
   "homepage": "https://github.com/garbados/the-longtime-game#readme",
   "devDependencies": {
-    "serve": "^14.2.1",
+    "serve": "^14.2.3",
     "webpack": "^5.89.0",
     "webpack-cli": "^5.1.4"
   },
